@@ -9,6 +9,8 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ### T11 — App factory and request protection: completed locally
 
+Commit: `7e1fa76120ced6b5cd57211f4e587e91feffe7dc`
+
 Implemented:
 - `imagelab.create_app` now owns validated application construction; `imagelab.config` centralizes environment, host/origin, cookie, upload, proxy, and session settings.
 - Production startup fails closed without an explicit session secret. Development uses an ephemeral process secret instead of the old fixed fallback.
@@ -21,6 +23,11 @@ TDD evidence:
 - RED: `tests/test_security.py` initially failed collection because the app factory did not exist; the first secure-cookie test exposed a host-scoped test-session setup error before going green.
 - GREEN: security suite `6 passed`; focused security/app/queue suite `24 passed`; full suite `93 passed, 1 xfailed in 0.48s`; compilation and diff checks passed.
 - Compatibility route definitions remain in `app/app.py` for the T12 route-map extraction; importing the factory itself starts no worker.
+
+R2 milestone artifact:
+- Local: `backups/milestones/t11-2026-09-21T182943Z/mac-image-lab-t11.bundle`
+- Verified key: `hermes-data/Marvin/Mac Image Lab/builds/t11/2026-09-21/mac-image-lab-t11.bundle`
+- SHA-256: `213249c78c8366dd2149fb779a1b3cce6d758c1396aa51a424dfacd1fc463e3f`; `head_object` length and metadata matched.
 
 ### T10 — Queue controls and telemetry: completed locally
 
