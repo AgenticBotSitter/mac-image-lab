@@ -30,7 +30,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from imagelab import storage
-from imagelab.validation import normalize_generation_request
+from imagelab.models.registry import registry
+from imagelab.validation import GenerationRequest, normalize_generation_request
 
 RUNS = ROOT / "runs"
 REFERENCES = ROOT / "references"
@@ -47,24 +48,8 @@ GENERATED_ROOT = LIBRARY_ROOT / "Generated Images"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
-MODELS: dict[str, dict[str, Any]] = {
-    "qwen-image-2.1-local": {
-        "label": "Qwen-Image-2.1", "source": "Local", "runtime": "ComfyUI · Apple MPS", "status": "available",
-        "capabilities": ["Text to image", "RGBA transparency", "Reference/edit pending validation"],
-        "guide": {
-            "summary": "Describe the finished frame: medium, subject, placement, background, materials, lighting, palette, and composition.",
-            "strengths": ["Detailed materials, lighting, composition, and refined texture", "Literal visible text when quoted exactly", "Native transparent RGBA output"],
-            "avoid": ["Vague keyword piles such as ‘masterpiece, 8K’", "Conflicting styles or lighting", "Dense tiny text without exact quoted wording"],
-            "template": "A [orientation] [medium/style] of [subject], [placement/framing], against [specific background]. [Materials and details]. [Light]. The composition is [mood/palette/layout].",
-            "docs": "https://github.com/QwenLM/Qwen-Image-2.1",
-        },
-    },
-}
-PROFILES = {
-    "fast": {"label": "Fast preview", "width": 768, "height": 768, "steps": 8, "resolution": 768, "expected": "about 2 minutes after warm-up"},
-    "standard": {"label": "Standard", "width": 1024, "height": 1024, "steps": 20, "resolution": 1024, "expected": "about 6 minutes after warm-up"},
-    "maximum": {"label": "Maximum native 2K", "width": 1696, "height": 2528, "steps": 25, "resolution": 2048, "expected": "about 35 minutes on MPS; submit intentionally"},
-}
+MODELS: dict[str, dict[str, Any]] = registry.legacy_view()
+PROFILES = {key: dict(value) for key, value in registry.get("qwen-image-2.1-local").profiles.items()}
 
 app = Flask(__name__)
 app.config.update(MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES, SECRET_KEY=os.environ.get("MAC_IMAGE_LAB_SESSION_KEY", "local-only-no-auth"))
@@ -216,31 +201,14 @@ def family_groups() -> list[dict[str, Any]]:
 
 
 def build_workflow(prompt: str, width: int, height: int, steps: int, seed: int, resolution: int, prefix: str, model_id: str) -> dict[str, Any]:
-    if model_id != "qwen-image-2.1-local":
-        raise ValueError("No verified workflow adapter is installed for this model")
-    return {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "qwen_image_2.1_int8_convrot.safetensors", "weight_dtype": "default"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_8b_int8_convrot.safetensors", "type": "qwen_image", "device": "default"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_2.1_vae_bf16.safetensors"}},
-        "4": {"class_type": "TextEncodeQwenImage21", "inputs": {"clip": ["2", 0], "prompt": prompt, "negative_prompt": "", "resolution": resolution}},
-        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
-        "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["4", 0], "negative": ["4", 1], "latent_image": ["5", 0], "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
-        "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
-        "8": {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": prefix}},
-    }
+    request_value = GenerationRequest(prompt, model_id, "custom", width, height, steps, seed, resolution, "original")
+    return registry.adapter(model_id).build_workflow(request_value, prefix=prefix)
 
 
 def build_reference_edit_workflow(prompt: str, steps: int, seed: int, resolution: int, prefix: str, input_name: str) -> dict[str, Any]:
-    return {
-        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "qwen_image_2.1_int8_convrot.safetensors", "weight_dtype": "default"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_8b_int8_convrot.safetensors", "type": "qwen_image", "device": "default"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_2.1_vae_bf16.safetensors"}},
-        "4": {"class_type": "LoadImage", "inputs": {"image": input_name}},
-        "5": {"class_type": "TextEncodeQwenImage21", "inputs": {"clip": ["2", 0], "prompt": prompt, "negative_prompt": "", "resolution": resolution, "images": {"image_1": ["4", 0]}, "vae": ["3", 0]}},
-        "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["5", 0], "negative": ["5", 1], "latent_image": ["5", 2], "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
-        "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
-        "8": {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": prefix}},
-    }
+    model_id = "qwen-image-2.1-local"
+    request_value = GenerationRequest(prompt, model_id, "custom", resolution, resolution, steps, seed, resolution, "reference_transform")
+    return registry.adapter(model_id).build_workflow(request_value, prefix=prefix, input_name=input_name)
 
 
 def create_reference_transform(form: dict[str, str], upload: Any) -> str:
@@ -670,19 +638,10 @@ def download(run_id: str, name: str):
 
 @app.post("/reference/upload")
 def upload_reference():
-    f = request.files.get("reference")
-    if not f or f.mimetype not in IMAGE_TYPES:
-        return jsonify({"error": "PNG, JPEG, or WebP only"}), 400
-    data = f.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        return jsonify({"error": "Reference exceeds 20 MiB"}), 400
-    digest = hashlib.sha256(data).hexdigest()
-    suffix = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[f.mimetype]
-    REFERENCES.mkdir(exist_ok=True)
-    p = REFERENCES / (digest + suffix)
-    if not p.exists():
-        p.write_bytes(data)
-    return jsonify({"status": "stored_not_used_for_inference", "sha256": digest, "file": p.name, "reason": "Reference editing remains disabled pending a tested Qwen edit workflow."})
+    return jsonify({
+        "error": "Legacy reference storage has been retired; use the validated Transform flow.",
+        "transform_url": "/transform",
+    }), 410
 
 
 if __name__ == "__main__":

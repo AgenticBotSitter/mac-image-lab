@@ -7,7 +7,25 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T05 — Model contracts, registry, and Qwen adapter: completed locally
+
+Implemented:
+- Typed immutable model, backend-job/status, output-artifact, unsupported-operation, and adapter contracts.
+- A verified registry that only exposes models marked installed, validated, and available.
+- Qwen-Image-2.1 metadata, profiles, capabilities, warnings, guidance, artifact identities, and runtime-estimate provenance now live in its model specification.
+- Exact validated text-to-image and reference-conditioned ComfyUI graphs moved from the Flask web layer into `Qwen21Adapter` without node rewiring.
+- Existing compatibility helpers dispatch through the registry, so a future model needs an adapter and registry entry rather than template-specific workflow code.
+- The contradictory write-only `/reference/upload` endpoint now returns HTTP 410 and directs clients to `/transform` without writing files.
+- `docs/model-adapters.md` documents the evidence-gated onboarding route for future local or online models. No second model was installed or enabled.
+
+TDD evidence:
+- RED: adapter tests initially failed collection because `imagelab.models.qwen21` and the registry did not exist.
+- GREEN: adapter/app/validation target suite `28 passed`; full suite `47 passed, 3 xfailed in 0.32s`; Python compile and diff checks passed.
+- Contract tests cover exact Qwen filenames/wiring, source-conditioned latent shape, required source name, explicit unsupported operations, registry availability truth, future-model metadata behavior, and legacy-route retirement.
+
 ### T04 — Harden image ingestion: completed locally
+
+Commit: `545642a69d95dafd1e20bd73fee4945555137c02`
 
 Implemented:
 - `imagelab/storage.py` performs compressed-size, declared/decoded format, full-decode, decoded-pixel, still-image, and corruption checks.
@@ -97,7 +115,7 @@ R2 status:
 
 ## Next task
 
-T05 — Extract the typed model contract, verified registry, and exact Qwen text/reference adapter. Keep only Qwen selectable, move graph construction out of the web layer, add contract/wiring tests, and retire the contradictory legacy reference-upload route.
+T06 — Make receipts/evidence atomic and archival complete: separate generation/archive state, snapshot original and inference references plus model/lineage manifests, verify every object, make retries idempotent, and remove the archive-completeness strict xfail.
 
 ## Constraints carried forward
 
