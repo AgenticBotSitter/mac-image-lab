@@ -224,6 +224,35 @@ def build_workflow(prompt: str, width: int, height: int, steps: int, seed: int, 
     }
 
 
+def build_reference_edit_workflow(prompt: str, steps: int, seed: int, resolution: int, prefix: str, input_name: str) -> dict[str, Any]:
+    return {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "qwen_image_2.1_int8_convrot.safetensors", "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen3vl_8b_int8_convrot.safetensors", "type": "qwen_image", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_2.1_vae_bf16.safetensors"}},
+        "4": {"class_type": "LoadImage", "inputs": {"image": input_name}},
+        "5": {"class_type": "TextEncodeQwenImage21", "inputs": {"clip": ["2", 0], "prompt": prompt, "negative_prompt": "", "resolution": resolution, "images": {"image_1": ["4", 0]}, "vae": ["3", 0]}},
+        "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["5", 0], "negative": ["5", 1], "latent_image": ["5", 2], "seed": seed, "steps": steps, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+        "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
+        "8": {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": prefix}},
+    }
+
+
+def create_reference_transform(form: dict[str, str], upload: Any) -> str:
+    prompt = form.get("prompt", "").strip()
+    if not prompt or len(prompt) > 4000: raise ValueError("Edit instruction must be 1–4000 characters")
+    if not upload or upload.mimetype not in IMAGE_TYPES: raise ValueError("Upload a PNG, JPEG, or WebP image")
+    data = upload.read()
+    if not data or len(data) > MAX_UPLOAD_BYTES: raise ValueError("Image must be non-empty and 20 MiB or smaller")
+    with Image.open(__import__('io').BytesIO(data)) as im: width,height=im.size
+    run_id=str(uuid.uuid4()); d=RUNS/run_id; d.mkdir(parents=True); suffix={"image/png":".png","image/jpeg":".jpg","image/webp":".webp"}[upload.mimetype]
+    ref_name=f"mac-image-lab-reference-{run_id}{suffix}"; (d / ("reference" + suffix)).write_bytes(data); (COMFY_ROOT/"input"/ref_name).write_bytes(data)
+    profile=form.get("profile","fast"); p=PROFILES.get(profile,PROFILES["fast"]); steps=int(form.get("steps") or p["steps"]); seed=int(form.get("seed") or int.from_bytes(os.urandom(4),"big")); workflow=build_reference_edit_workflow(prompt,steps,seed,p["resolution"],f"mac-image-lab-{run_id}",ref_name)
+    (d/"workflow.json").write_text(json.dumps(workflow,indent=2)+"\n")
+    folder=safe_library_rel(form.get("library_folder") or "Inbox")
+    receipt={"schema_version":2,"run_id":run_id,"created_at":now(),"status":"queued","title":form.get("title","").strip() or "Reference transform","model_id":"qwen-image-2.1-local","profile":profile,"prompt":prompt,"parameters":{"width":width,"height":height,"steps":steps,"seed":seed,"sampler":"euler","scheduler":"simple","cfg":1.0,"resolution":p["resolution"]},"workflow":workflow,"family_id":run_id,"parent_run_id":None,"library_folder":folder,"library_copies":[],"archive_state":"local_only","reference_edit":{"enabled":True,"experimental":True,"preservation":"best effort; do not promise exact likeness","source_file":"reference"+suffix,"source_sha256":hashlib.sha256(data).hexdigest()}}
+    write_receipt(run_id,receipt); return run_id
+
+
 def http_json(path: str, method: str = "GET", data: dict[str, Any] | None = None, timeout: int = 30) -> dict[str, Any]:
     payload = json.dumps(data).encode() if data is not None else None
     req = Request(COMFY_URL + path, data=payload, method=method, headers={"Content-Type": "application/json"} if payload else {})
@@ -416,6 +445,22 @@ def model_notes_view(model_id: str):
         save_model_note(model_id, request.form.get("note", ""))
         return redirect(url_for("index"))
     except ValueError as exc:
+        return render_template("error.html", message=str(exc)), 400
+
+
+@app.get("/transform")
+def transform_view():
+    return render_template("transform.html", profiles=PROFILES, folders=list_library_folders())
+
+
+@app.post("/transform")
+def transform_submit():
+    try:
+        run_id = create_reference_transform(request.form, request.files.get("reference"))
+        start_worker()
+        work_queue.put(run_id)
+        return redirect(url_for("run_view", run_id=run_id))
+    except (ValueError, OSError, Image.UnidentifiedImageError) as exc:
         return render_template("error.html", message=str(exc)), 400
 
 

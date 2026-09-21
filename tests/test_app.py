@@ -16,6 +16,15 @@ def test_workflow_has_proven_qwen_nodes():
     assert workflow["6"]["inputs"]["sampler_name"] == "euler"
 
 
+def test_reference_edit_workflow_has_validated_conditioning_shape():
+    workflow = lab.build_reference_edit_workflow("change the scene", 8, 1, 768, "x", "reference.png")
+    assert workflow["4"]["class_type"] == "LoadImage"
+    assert workflow["5"]["class_type"] == "TextEncodeQwenImage21"
+    assert workflow["5"]["inputs"]["images"] == {"image_1": ["4", 0]}
+    assert workflow["5"]["inputs"]["vae"] == ["3", 0]
+    assert workflow["6"]["inputs"]["latent_image"] == ["5", 2]
+
+
 def test_only_verified_model_is_available():
     assert lab.model_for("qwen-image-2.1-local")["source"] == "Local"
     with pytest.raises(ValueError):
