@@ -39,7 +39,16 @@ Validate without revealing the value:
 
 ## Cutover
 
-After explicit approval and a clean drain:
+After explicit approval and a clean drain, the preferred path is the checked one-command cutover script. Run it from Terminal.app outside the Hermes gateway:
+
+```bash
+cd "/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab"
+bash scripts/cutover_services.sh
+```
+
+The script checks both queues, creates and verifies a SQLite backup, provisions the owner-only key when absent, installs the validated plists, replaces only the expected manual listeners, starts all three services, and verifies local plus Tailscale health. If it reports `CUTOVER FAILED`, do not rerun it blindly; inspect the named failure or ask Hermes to verify whether the cutover is partial.
+
+Manual equivalent, retained for recovery/reference:
 
 ```bash
 mkdir -p logs ~/Library/LaunchAgents
@@ -59,9 +68,9 @@ launchctl print gui/$(id -u)/com.alastairfraser.mac-image-lab.web
 launchctl print gui/$(id -u)/com.alastairfraser.mac-image-lab.worker
 launchctl print gui/$(id -u)/com.alastairfraser.mac-image-lab.comfyui
 lsof -nP -iTCP:7864 -iTCP:8188 -sTCP:LISTEN
-curl -fsS http://127.0.0.1:7864/health
+curl -fsS http://127.0.0.1:7864/healthz
 curl -fsS http://127.0.0.1:8188/object_info >/dev/null
-curl -fsS https://alastairs-mac-mini.tail97e4dc.ts.net/health
+curl -fsS https://alastairs-mac-mini.tail97e4dc.ts.net/healthz
 ```
 
 Expect one loopback listener per port, all three service labels with real PIDs, a healthy web response, and no direct public ComfyUI route. Perform one crash-recovery exercise only when no generation is active. Verify the replacement PID and health before continuing.
