@@ -1,4 +1,5 @@
 flask==3.1.2
 boto3==1.40.65
 Pillow==12.0.0
+waitress==3.0.2
 pytest==8.4.2

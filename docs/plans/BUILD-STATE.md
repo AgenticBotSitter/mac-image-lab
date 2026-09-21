@@ -7,6 +7,14 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T20 — Supervised production services: prepared; cutover approval required
+
+Pinned Waitress `3.0.2`, added a fail-closed production runner, added owner-only session-key-file loading for the worker, and prepared three loopback-only LaunchAgent templates for Waitress, the generation worker, and ComfyUI. The templates contain no credential values and passed `plutil -lint`. `docs/operations.md` records drain, backup, cutover, verification, and rollback procedures. Current service inspection found the web app and ComfyUI running manually and no supervised generation worker; none of the live processes, installed LaunchAgents, Tailscale routing, or ports were changed.
+
+Verification: install tests `8 passed`; full suite `142 passed`; Python compilation and `git diff --check` passed.
+
+**Checkpoint:** explicit Alastair approval is required before copying templates into `~/Library/LaunchAgents`, provisioning the session key, stopping manual services, or bootstrapping the replacements.
+
 ### T19 — Collections, metadata, reversible trash, and exports: completed
 
 Commit: `eff738d27e1dd0164329ce601d1de0d67cffc053`
@@ -361,7 +369,7 @@ R2 status:
 
 ## Next task
 
-T20 — prepare pinned Waitress and launchd service definitions, inspect existing process ownership, then stop for explicit production cutover approval before changing live services.
+T20 — awaiting explicit production cutover approval. After approval: drain active work, back up state, install and bootstrap the three supervised services, verify loopback/Tailscale health and process ownership, then perform controlled recovery checks.
 
 ## Constraints carried forward
 

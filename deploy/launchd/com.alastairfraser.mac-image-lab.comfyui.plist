@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.alastairfraser.mac-image-lab.comfyui</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/alastairfraser/hermes-data/Marvin/Projects/Local Image Generation/Qwen-Image-2.1/ComfyUI/.venv/bin/python</string>
+    <string>/Users/alastairfraser/hermes-data/Marvin/Projects/Local Image Generation/Qwen-Image-2.1/ComfyUI/main.py</string>
+    <string>--listen</string><string>127.0.0.1</string>
+    <string>--port</string><string>8188</string>
+    <string>--disable-auto-launch</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/alastairfraser/hermes-data/Marvin/Projects/Local Image Generation/Qwen-Image-2.1/ComfyUI</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/logs/comfyui.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/logs/comfyui.err.log</string>
+</dict>
+</plist>

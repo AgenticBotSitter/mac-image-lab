@@ -1,8 +1,11 @@
 import hashlib
 import importlib.util
 import json
+import plistlib
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 MODULE_PATH = Path(__file__).parents[1] / "scripts" / "verify_install.py"
@@ -95,3 +98,71 @@ def test_git_probe_preserves_leading_dot_in_dirty_path(tmp_path):
     report = verify_install._git_probe(tmp_path)
 
     assert report["dirty_paths"] == [".gitignore"]
+
+
+ROOT = Path(__file__).parents[1]
+PLISTS = ROOT / "deploy" / "launchd"
+
+
+def test_waitress_is_pinned_and_importable():
+    assert "waitress==3.0.2" in (ROOT / "requirements.txt").read_text().splitlines()
+    import waitress
+    assert waitress is not None
+
+
+def test_launchd_templates_are_unique_loopback_supervised_and_secret_free():
+    files = sorted(PLISTS.glob("*.plist"))
+    assert len(files) == 3
+    labels = set()
+    for path in files:
+        raw = path.read_text()
+        assert "MAC_IMAGE_LAB_SESSION_KEY" not in raw
+        assert "<SECRET>" not in raw and "password" not in raw.lower()
+        config = plistlib.loads(path.read_bytes())
+        assert config["Label"] not in labels
+        labels.add(config["Label"])
+        assert config["RunAtLoad"] is True
+        assert config["ThrottleInterval"] >= 10
+        assert config["ProcessType"] == "Background"
+        assert config["ProgramArguments"][0].startswith("/Users/alastairfraser/")
+        assert config["StandardOutPath"].startswith(str(ROOT / "logs"))
+        assert config["StandardErrorPath"].startswith(str(ROOT / "logs"))
+    web = plistlib.loads((PLISTS / "com.alastairfraser.mac-image-lab.web.plist").read_bytes())
+    assert "127.0.0.1" in web["ProgramArguments"] and "7864" in web["ProgramArguments"]
+    worker = plistlib.loads((PLISTS / "com.alastairfraser.mac-image-lab.worker.plist").read_bytes())
+    worker_args = " ".join(worker["ProgramArguments"])
+    assert "imagelab.worker" in worker_args and "--session-key-file" in worker_args
+    comfy = plistlib.loads((PLISTS / "com.alastairfraser.mac-image-lab.comfyui.plist").read_bytes())
+    assert "127.0.0.1" in comfy["ProgramArguments"] and "8188" in comfy["ProgramArguments"]
+
+
+def test_web_runner_fails_closed_without_secure_secret_file(tmp_path):
+    result = subprocess.run(
+        [str(ROOT / ".venv/bin/python"), str(ROOT / "scripts/run_web.py"), "--secret-file", str(tmp_path / "missing"), "--check"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "secret" in (result.stdout + result.stderr).lower()
+
+
+def test_web_runner_check_accepts_owner_only_secret_and_keeps_loopback(tmp_path):
+    secret = tmp_path / "session-key"
+    secret.write_text("a" * 64)
+    secret.chmod(0o600)
+    result = subprocess.run(
+        [str(ROOT / ".venv/bin/python"), str(ROOT / "scripts/run_web.py"), "--secret-file", str(secret), "--host", "127.0.0.1", "--port", "7864", "--check"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "production configuration valid" in result.stdout
+    rejected = subprocess.run(
+        [str(ROOT / ".venv/bin/python"), str(ROOT / "scripts/run_web.py"), "--secret-file", str(secret), "--host", "0.0.0.0", "--check"],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    assert rejected.returncode != 0
+
+
+def test_operations_guide_contains_cutover_rollback_and_verification():
+    guide = (ROOT / "docs/operations.md").read_text()
+    for phrase in ["Approval checkpoint", "drain", "rollback", "127.0.0.1:7864", "127.0.0.1:8188", "Tailscale", "head_object"]:
+        assert phrase.lower() in guide.lower()

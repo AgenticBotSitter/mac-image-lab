@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -98,8 +99,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Mac Image Lab generation worker")
     parser.add_argument("--database", type=Path, default=Path(__file__).parents[1] / "state/library.sqlite3")
     parser.add_argument("--lock", type=Path, default=Path(__file__).parents[1] / "state/worker.lock")
+    parser.add_argument("--session-key-file", type=Path)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
+    if args.session_key_file:
+        from imagelab.config import secure_secret_file
+        os.environ["MAC_IMAGE_LAB_ENV"] = "production"
+        os.environ["MAC_IMAGE_LAB_SESSION_KEY"] = secure_secret_file(args.session_key_file)
 
     # Imported only by the worker entry point; the web module never starts a worker.
     from app.app import recovery_backend

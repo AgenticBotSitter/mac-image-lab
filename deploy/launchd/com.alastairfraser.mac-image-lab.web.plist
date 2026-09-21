@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.alastairfraser.mac-image-lab.web</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/.venv/bin/python</string>
+    <string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/scripts/run_web.py</string>
+    <string>--secret-file</string><string>/Users/alastairfraser/.config/mac-image-lab/session-key</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>7864</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/logs/web.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/logs/web.err.log</string>
+</dict>
+</plist>

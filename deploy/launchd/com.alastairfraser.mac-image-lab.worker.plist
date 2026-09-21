@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.alastairfraser.mac-image-lab.worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/.venv/bin/python</string>
+    <string>-m</string><string>imagelab.worker</string>
+    <string>--database</string><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/state/library.sqlite3</string>
+    <string>--lock</string><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/state/worker.lock</string>
+    <string>--session-key-file</string><string>/Users/alastairfraser/.config/mac-image-lab/session-key</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/logs/worker.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab/logs/worker.err.log</string>
+</dict>
+</plist>
