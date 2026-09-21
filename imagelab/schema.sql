@@ -55,6 +55,13 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_queue ON jobs(state, priority, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_run_kind ON jobs(run_id, kind);
 
+CREATE TABLE IF NOT EXISTS job_retries (
+    parent_job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    child_job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (parent_job_id, child_job_id)
+);
+
 CREATE TABLE IF NOT EXISTS job_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,

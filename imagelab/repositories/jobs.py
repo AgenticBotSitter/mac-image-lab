@@ -251,6 +251,68 @@ class JobRepository:
             )
             self._event(job_id, "failed", {"error_type": type(error).__name__, "message": message})
 
+    def latest_event_detail(self, job_id: str, event_type: str) -> dict[str, Any]:
+        row = self.connection.execute(
+            """SELECT detail_json FROM job_events
+               WHERE job_id=? AND event_type=? ORDER BY id DESC LIMIT 1""",
+            (job_id, event_type),
+        ).fetchone()
+        if row is None:
+            return {}
+        try:
+            value = json.loads(row["detail_json"])
+        except json.JSONDecodeError:
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def cancel_queued(self, job_id: str) -> bool:
+        timestamp = utc_now()
+        with self.connection:
+            cursor = self.connection.execute(
+                """UPDATE jobs SET state='cancelled', completed_at=?, updated_at=?
+                   WHERE id=? AND state='queued'""",
+                (timestamp, timestamp, job_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+            self.connection.execute(
+                "UPDATE runs SET generation_state='cancelled', completed_at=?, updated_at=? WHERE id=(SELECT run_id FROM jobs WHERE id=?)",
+                (timestamp, timestamp, job_id),
+            )
+            self._event(job_id, "cancelled", {"phase": "queued"})
+            return True
+
+    def confirm_running_cancelled(self, job_id: str) -> bool:
+        timestamp = utc_now()
+        with self.connection:
+            cursor = self.connection.execute(
+                """UPDATE jobs SET state='cancelled', completed_at=?, updated_at=?
+                   WHERE id=? AND state='running'""",
+                (timestamp, timestamp, job_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+            self.connection.execute(
+                "UPDATE runs SET generation_state='cancelled', completed_at=?, updated_at=? WHERE id=(SELECT run_id FROM jobs WHERE id=?)",
+                (timestamp, timestamp, job_id),
+            )
+            self._event(job_id, "cancelled", {"phase": "running", "ownership_verified": True})
+            return True
+
+    def link_retry(self, parent_job_id: str, child_job_id: str) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO job_retries(parent_job_id, child_job_id, created_at) VALUES(?,?,?)",
+                (parent_job_id, child_job_id, utc_now()),
+            )
+            self._event(child_job_id, "retry_created", {"parent_job_id": parent_job_id})
+
+    def retry_parent(self, child_job_id: str) -> str | None:
+        row = self.connection.execute(
+            "SELECT parent_job_id FROM job_retries WHERE child_job_id=?", (child_job_id,)
+        ).fetchone()
+        return str(row["parent_job_id"]) if row else None
+
     def events_for_run(self, run_id: str) -> list[dict[str, Any]]:
         rows = self.connection.execute(
             """SELECT event.* FROM job_events AS event

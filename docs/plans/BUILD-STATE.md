@@ -7,7 +7,23 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T10 — Queue controls and telemetry: completed locally
+
+Implemented:
+- Compact allowlisted `GET /api/jobs` telemetry exposes job state, timestamps, attempts, sanitized status, and persisted backend progress without exposing submission tokens, receipt paths, workflows, or raw backend payloads.
+- Queued cancellation uses a conditional SQLite state transition. Running cancellation is attempted only when the exact owned ComfyUI prompt is the sole active backend job; otherwise the API returns a safe conflict.
+- Retry creates a distinct run and job linked through `job_retries`; it never reuses the original run directory.
+- `/queue` polls compact JSON, shows active/recovery states, backs off visibly on disconnection, and offers only state-appropriate cancel/retry actions.
+
+TDD evidence:
+- RED: the new queue API tests initially failed because the queue route and controls did not exist; persisted heartbeat progress was initially omitted from the allowlisted response.
+- GREEN: focused queue/job/recovery suite `23 passed`; full suite `87 passed, 1 xfailed in 0.47s`; Python compile and diff checks passed.
+- The remaining strict expected failure belongs to T12 actual-output display.
+- No live worker restart or production service cutover was performed.
+
 ### T09 — Interruption reconciliation and long-job safety: completed locally
+
+Commit: `b600f939b39de950b167ff325a868498c5e9f1ba`
 
 Implemented:
 - Durable submission intent is recorded before contacting ComfyUI; correlation tokens are reused to find accepted work after a crash.
@@ -194,7 +210,7 @@ R2 status:
 
 ## Next task
 
-T10 — Queue controls and telemetry: compact job APIs, progress and reconnect states, safe queued cancellation, ownership-checked running cancellation, and explicit retry as a linked new attempt.
+T11 — App factory and request protection: extract configuration/security/routes, add CSRF and origin/host enforcement, secure cookies and headers, and keep production startup fail-closed.
 
 ## Constraints carried forward
 

@@ -469,6 +469,21 @@ class ComfyRecoveryBackend:
                 return BackendSnapshot("queued")
         return BackendSnapshot("unknown")
 
+    def cancel(self, backend_job_id: str) -> bool:
+        try:
+            queue_state = http_json("/queue")
+        except (URLError, TimeoutError, OSError):
+            return False
+        running = queue_state.get("queue_running", [])
+        owned = [item for item in running if _json_contains(item, backend_job_id)]
+        if len(running) != 1 or len(owned) != 1:
+            return False
+        try:
+            http_json("/interrupt", "POST", {})
+        except (URLError, TimeoutError, OSError):
+            return False
+        return True
+
     def collect(self, run_id: str, backend_job_id: str, snapshot: BackendSnapshot) -> bool:
         record = snapshot.payload.get("record")
         if not isinstance(record, dict):
@@ -704,6 +719,97 @@ def generate():
         return redirect(url_for("run_view", run_id=run_id))
     except (ValueError, OSError) as exc:
         return render_template("error.html", message=str(exc)), 400
+
+
+@app.get("/queue")
+def queue_view():
+    return render_template("queue.html")
+
+
+@app.get("/api/jobs")
+def jobs_api():
+    db = database_path()
+    if not db.exists():
+        return jsonify({"jobs": [], "poll_after_seconds": 2})
+    connection = initialize_database(db)
+    try:
+        repository = JobRepository(connection)
+        jobs = repository.list(limit=100)
+        progress_by_job = {
+            job["id"]: repository.latest_event_detail(job["id"], "heartbeat").get("progress")
+            for job in jobs
+        }
+    finally:
+        connection.close()
+    public = []
+    for job in jobs:
+        public.append({
+            "id": job["id"],
+            "run_id": job["run_id"],
+            "kind": job["kind"],
+            "state": job["state"],
+            "created_at": job["created_at"],
+            "started_at": job["started_at"],
+            "completed_at": job["completed_at"],
+            "heartbeat_at": job["heartbeat_at"],
+            "attempt_count": job["attempt_count"],
+            "progress": progress_by_job[job["id"]],
+            "error_type": job["error_type"],
+            "status_detail": "Manual review required" if job["state"] == "needs_attention" else None,
+        })
+    return jsonify({"jobs": public, "poll_after_seconds": 2})
+
+
+@app.post("/api/jobs/<job_id>/cancel")
+def cancel_job(job_id: str):
+    safe_id(job_id)
+    connection = initialize_database(database_path())
+    try:
+        repository = JobRepository(connection)
+        job = repository.get(job_id)
+        if job is None:
+            abort(404)
+        if job["state"] == "queued" and repository.cancel_queued(job_id):
+            return jsonify({"id": job_id, "state": "cancelled"})
+        if job["state"] == "running" and job.get("backend_job_id"):
+            if recovery_backend().cancel(job["backend_job_id"]):
+                repository.confirm_running_cancelled(job_id)
+                return jsonify({"id": job_id, "state": "cancelled"})
+        return jsonify({"error": "This job cannot be safely cancelled because exact backend ownership is unproven."}), 409
+    finally:
+        connection.close()
+
+
+@app.post("/api/jobs/<job_id>/retry")
+def retry_job(job_id: str):
+    safe_id(job_id)
+    connection = initialize_database(database_path())
+    try:
+        repository = JobRepository(connection)
+        original = repository.get(job_id)
+        if original is None:
+            abort(404)
+        if original["state"] not in {"failed", "cancelled", "needs_attention"}:
+            return jsonify({"error": "Only failed, cancelled, or recovery-blocked jobs can be retried."}), 409
+        parent = read_receipt(original["run_id"])
+        parameters = parent.get("parameters") or {}
+        form = {
+            "action": "repeat",
+            "prompt": parent["prompt"],
+            "model_id": parent["model_id"],
+            "profile": parent.get("profile") or "fast",
+            "width": str(parameters.get("width") or ""),
+            "height": str(parameters.get("height") or ""),
+            "steps": str(parameters.get("steps") or ""),
+            "seed": str(parameters.get("seed") if parameters.get("seed") is not None else ""),
+            "library_folder": parent.get("library_folder") or "Inbox",
+        }
+        new_run_id = validate_and_create(form, parent=parent)
+        new_job = enqueue_run(new_run_id, str(uuid.uuid4()))
+        repository.link_retry(job_id, new_job["id"])
+        return jsonify({"job_id": new_job["id"], "run_id": new_run_id}), 201
+    finally:
+        connection.close()
 
 
 @app.get("/runs/<run_id>")
