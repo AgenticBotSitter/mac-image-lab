@@ -9,6 +9,8 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ### T15 — Fullscreen viewer and run detail: completed locally
 
+Commit: `3c24a66866137d48d6b05731cd2a67efac973c33`
+
 Implemented:
 - Full-resolution image loading is deferred until the user opens the modal viewer; the detail page uses a private 960-pixel derivative.
 - Added zoom, reset, pointer drag, wheel/pinch controls, family navigation with arrow keys, Escape close, native modal focus containment, and focus restoration.
@@ -20,6 +22,10 @@ Verification:
 - RED: the first viewer browser run failed because no deferred preview/viewer surface existed.
 - GREEN: `tests/browser/test_viewer.py` passed `4 passed`; route/regression focus passed `11 passed`; full suite passed `116 passed in 12.24s`; Python compilation and `git diff --check` passed.
 - Real-state desktop/phone detail and fullscreen screenshots were captured and visually inspected under `validation/t15/`; no horizontal overflow or viewer clipping was observed.
+
+R2 milestone artifacts (`head_object` length and SHA-256 metadata verified for every object):
+- Build bundle: `hermes-data/Marvin/Mac Image Lab/builds/t15/2026-09-21/mac-image-lab-t15.bundle` — SHA-256 `a06a88243a234bea3599c24e9efe2a673f02109ef92f64152a5a6374d8da056f`.
+- Exact detail and viewer screenshots: `hermes-data/Marvin/Mac Image Lab/validation/t15/2026-09-21/`.
 
 ### T14 — Responsive visual shell and Library: completed; visual direction approved by Alastair
 
