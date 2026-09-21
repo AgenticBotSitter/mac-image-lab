@@ -9,11 +9,17 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ### T17 — Source lineage and explicit iteration modes: completed locally
 
+Commit: `8ae3b232f14ff9adb6f8d5f2af4d0da3756915ee`
+R2 bundle: `hermes-data/Marvin/Mac Image Lab/builds/t17/2026-09-21/mac-image-lab-t17.bundle` — SHA-256 `4d1b3544c2171adef832d8917d96440c5c410f7e1fd098959bd5a523f1513b27`; `head_object` verified.
+
 Implemented and verified source-aware transforms from completed Library images, new-family external uploads, immutable parent lineage, exact private source preservation, and source-conditioned repeat/variation/larger workflows. Family pages now expose the exact transform source and preferred-version state without loading result originals in the grid.
 
 Verification: lineage suite `3 passed`; combined T16/T17 focused suite `9 passed`; full suite `125 passed in 16.91s`.
 
 ### T16 — Unified Create, Transform, and recipes: completed locally
+
+Commit: `8ae3b232f14ff9adb6f8d5f2af4d0da3756915ee`
+R2 bundle: `hermes-data/Marvin/Mac Image Lab/builds/t16/2026-09-21/mac-image-lab-t16.bundle` — SHA-256 `4d1b3544c2171adef832d8917d96440c5c410f7e1fd098959bd5a523f1513b27`; `head_object` verified. Exact screenshots are verified under `hermes-data/Marvin/Mac Image Lab/validation/t16/2026-09-21/`.
 
 Implemented one responsive Text/Transform workspace with model-driven guidance, independent quality/aspect controls, explicit custom overrides, measured queue estimates, safe upload preview/removal/drag-drop, protected edited prompts, one-submit guarding, versioned named recipes, and optimistic model-note revisions.
 
