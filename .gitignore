@@ -1,0 +1,15 @@
+# Local environments and generated Python files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local runtime state and generated image evidence
+runs/
+logs/
+.comfy-object-info.json
+
+# Local editor and OS files
+.DS_Store
+.env
+.env.*
