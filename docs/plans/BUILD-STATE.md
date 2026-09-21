@@ -7,6 +7,21 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T11 — App factory and request protection: completed locally
+
+Implemented:
+- `imagelab.create_app` now owns validated application construction; `imagelab.config` centralizes environment, host/origin, cookie, upload, proxy, and session settings.
+- Production startup fails closed without an explicit session secret. Development uses an ephemeral process secret instead of the old fixed fallback.
+- All requests enforce a host allowlist. Non-loopback clients cannot inject proxy or Tailscale identity headers.
+- Every mutation requires an allowed Origin and session-bound CSRF token outside explicit test mode; HTML forms and queue JavaScript carry tokens.
+- Responses include CSP, frame, MIME-sniffing, referrer, permissions, and private-cache protections. The remaining inline Transform script moved to local JavaScript.
+- Cookies are HttpOnly and SameSite=Lax, with Secure enabled for production HTTPS.
+
+TDD evidence:
+- RED: `tests/test_security.py` initially failed collection because the app factory did not exist; the first secure-cookie test exposed a host-scoped test-session setup error before going green.
+- GREEN: security suite `6 passed`; focused security/app/queue suite `24 passed`; full suite `93 passed, 1 xfailed in 0.48s`; compilation and diff checks passed.
+- Compatibility route definitions remain in `app/app.py` for the T12 route-map extraction; importing the factory itself starts no worker.
+
 ### T10 — Queue controls and telemetry: completed locally
 
 Commit: `dd33141092a4e140f7cfc6aa60e379a43bf21afc`
@@ -22,6 +37,11 @@ TDD evidence:
 - GREEN: focused queue/job/recovery suite `23 passed`; full suite `87 passed, 1 xfailed in 0.47s`; Python compile and diff checks passed.
 - The remaining strict expected failure belongs to T12 actual-output display.
 - No live worker restart or production service cutover was performed.
+
+R2 milestone artifact:
+- Local: `backups/milestones/t10-2026-09-21T182031Z/mac-image-lab-t10.bundle`
+- Verified key: `hermes-data/Marvin/Mac Image Lab/builds/t10/2026-09-21/mac-image-lab-t10.bundle`
+- SHA-256: `1220379414e93cbc10e89b96ac78f52c79edba47aa26d3cfe4906aaf4fcab5ac`; `head_object` length and metadata matched.
 
 ### T09 — Interruption reconciliation and long-job safety: completed locally
 
@@ -212,7 +232,7 @@ R2 status:
 
 ## Next task
 
-T11 — App factory and request protection: extract configuration/security/routes, add CSRF and origin/host enforcement, secure cookies and headers, and keep production startup fail-closed.
+T12 — Shared shell and route compatibility: extract the compatibility route map, make Library the landing page, add Create/Compare/Settings routes and consistent errors, remove unsafe referrer redirects, and resolve actual-output dimension display.
 
 ## Constraints carried forward
 

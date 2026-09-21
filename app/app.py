@@ -28,6 +28,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from imagelab import create_app
 from imagelab import storage
 from imagelab.db import connect_database, initialize_database
 from imagelab.models.registry import registry
@@ -56,8 +57,11 @@ IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 MODELS: dict[str, dict[str, Any]] = registry.legacy_view()
 PROFILES = {key: dict(value) for key, value in registry.get("qwen-image-2.1-local").profiles.items()}
 
-app = Flask(__name__)
-app.config.update(MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES, SECRET_KEY=os.environ.get("MAC_IMAGE_LAB_SESSION_KEY", "local-only-no-auth"))
+app = create_app(
+    __name__,
+    template_folder=ROOT / "app" / "templates",
+    static_folder=ROOT / "app" / "static",
+)
 archive_queue: queue.Queue[str] = queue.Queue()
 archive_worker_started = False
 archive_worker_lock = threading.Lock()

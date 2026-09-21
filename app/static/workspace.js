@@ -1,6 +1,15 @@
 (() => {
+  const recipe = document.getElementById("recipe");
+  const prompt = document.getElementById("prompt");
+  if (recipe && prompt) {
+    recipe.addEventListener("change", () => {
+      if (recipe.value) prompt.value = recipe.value;
+    });
+  }
+
   const list = document.getElementById("queue-list");
   const connection = document.getElementById("queue-connection");
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
   if (!list || !connection) return;
 
   let delay = 2000;
@@ -16,7 +25,7 @@
   async function mutate(job, action) {
     const response = await fetch(`/api/jobs/${job.id}/${action}`, {
       method: "POST",
-      headers: {"Accept": "application/json"}
+      headers: {"Accept": "application/json", "X-CSRF-Token": csrf}
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Queue action failed");
