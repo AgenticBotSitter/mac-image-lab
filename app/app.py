@@ -858,9 +858,94 @@ def gallery():
     return redirect(url_for("index"))
 
 
+def comparison_options() -> list[dict[str, Any]]:
+    options: list[dict[str, Any]] = []
+    for run in list_runs(limit=100):
+        if run.get("generation_state") != "succeeded" or not run.get("output") or run.get("deleted_at"):
+            continue
+        output = run["output"]
+        options.append({
+            "token": run["run_id"], "kind": "result", "run_id": run["run_id"],
+            "family_id": run["family_id"], "label": run["title"], "title": run["title"],
+            "url": url_for("original_media", run_id=run["run_id"]),
+            "width": int(output.get("width") or 0), "height": int(output.get("height") or 0),
+            "run": run,
+        })
+        reference = run.get("reference_edit") or {}
+        if reference.get("enabled") and reference.get("source_file"):
+            source_width = int(reference.get("source_width") or 0)
+            source_height = int(reference.get("source_height") or 0)
+            source_name = reference.get("source_file")
+            if (not source_width or not source_height) and isinstance(source_name, str) and Path(source_name).name == source_name:
+                source_path = run_dir(run["run_id"]) / source_name
+                try:
+                    with Image.open(source_path) as source_image:
+                        source_width, source_height = source_image.size
+                except (OSError, Image.UnidentifiedImageError):
+                    source_width, source_height = 0, 0
+            options.append({
+                "token": f"source:{run['run_id']}", "kind": "source", "run_id": run["run_id"],
+                "family_id": run["family_id"], "label": f"Exact source · {run['title']}", "title": "Exact source asset",
+                "url": url_for("reference_media", run_id=run["run_id"]),
+                "width": source_width, "height": source_height,
+                "run": run,
+            })
+    return options
+
+
 @app.get("/compare")
 def compare_view():
-    return render_template("compare.html", runs=list_runs(limit=100))
+    options = comparison_options()
+    by_token = {item["token"]: item for item in options}
+    left_token = request.args.get("left", "")
+    right_token = request.args.get("right", "")
+    selection_error = None
+    if left_token and left_token not in by_token:
+        selection_error = "The left comparison image is unavailable, missing, or in trash."
+    if right_token and right_token not in by_token:
+        selection_error = "The right comparison image is unavailable, missing, or in trash."
+    left = by_token.get(left_token) if left_token else (options[0] if options else None)
+    if right_token:
+        right = by_token.get(right_token)
+    elif left:
+        right = next((item for item in options if item["token"] != left["token"] and item["family_id"] == left["family_id"]), None)
+    else:
+        right = None
+    compatible = False
+    if left and right and left["width"] and left["height"] and right["width"] and right["height"]:
+        compatible = abs((left["width"] / left["height"]) - (right["width"] / right["height"])) < 0.01
+    preferred_run_id = None
+    if left:
+        connection = initialize_database(database_path())
+        try:
+            row = connection.execute("SELECT chosen_run_id FROM family_choices WHERE family_id = ?", (left["family_id"],)).fetchone()
+            preferred_run_id = row[0] if row else None
+        finally:
+            connection.close()
+    return render_template(
+        "compare.html", options=options, left=left, right=right,
+        compatible=compatible, selection_error=selection_error, preferred_run_id=preferred_run_id,
+    )
+
+
+@app.post("/families/<family_id>/preferred")
+def preferred_version_view(family_id: str):
+    safe_id(family_id)
+    run_id = safe_id(request.form.get("run_id", ""))
+    run = read_receipt(run_id)
+    if run.get("family_id") != family_id or run.get("generation_state") != "succeeded" or run.get("deleted_at"):
+        return render_template("error.html", message="Preferred version must be a visible completed result in this family"), 400
+    connection = initialize_database(database_path())
+    try:
+        connection.execute(
+            """INSERT INTO family_choices(family_id, chosen_run_id, updated_at) VALUES (?, ?, ?)
+               ON CONFLICT(family_id) DO UPDATE SET chosen_run_id=excluded.chosen_run_id, updated_at=excluded.updated_at""",
+            (family_id, run_id, now()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return redirect(url_for("compare_view", left=request.form.get("left", ""), right=request.form.get("right", "")))
 
 
 @app.get("/settings")

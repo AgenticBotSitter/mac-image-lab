@@ -1,12 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Compare · Mac Image Lab{% endblock %}
 {% block content %}
-<header class="page-head"><div><p class="eyebrow">RELATED VERSIONS</p><h1>Compare</h1><p>Select related images from a family to inspect their differences.</p></div></header>
-{% set completed = runs|selectattr('output')|list %}
-{% if completed|length >= 2 %}
-<section class="card"><p>The full synchronized comparison viewer arrives in the Compare phase. For now, open a family from the Library to choose versions without triggering generation.</p></section>
-<div class="image-grid compact">{% for run in completed %}<a class="image-tile" href="{{ url_for('run_view', run_id=run.run_id) }}"><img src="{{ url_for('download', run_id=run.run_id, name='output.png') }}" alt="{{ run.title }}" loading="lazy"><span class="tile-meta"><b>{{ run.title }}</b></span></a>{% endfor %}</div>
-{% else %}
-<section class="card empty"><h2>Two images are needed</h2><p>Create or transform another related version, then return here.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a></section>
+<header class="page-head"><div><p class="eyebrow">RELATED VERSIONS</p><h1>Compare</h1><p>Inspect two results or an exact transform source without triggering generation.</p></div></header>
+{% if options|length >= 2 %}
+<form class="card compare-picker" method="get" action="{{ url_for('compare_view') }}">
+  <label>Left / original<select name="left">{% for item in options %}<option value="{{ item.token }}" {% if left and left.token == item.token %}selected{% endif %}>{{ item.label }}</option>{% endfor %}</select></label>
+  <label>Right / result<select name="right">{% for item in options %}<option value="{{ item.token }}" {% if right and right.token == item.token %}selected{% endif %}>{{ item.label }}</option>{% endfor %}</select></label>
+  <button type="submit">Compare selected</button>
+</form>
+{% if selection_error %}<section class="card error">{{ selection_error }}</section>{% elif left and right %}
+<div class="compare-toolbar" aria-label="Comparison controls">
+  <div class="segmented"><button type="button" class="active" id="side-by-side-button" aria-pressed="true">Side-by-side view</button><button type="button" id="slider-button" aria-pressed="false">Slider view</button></div>
+  <label class="check"><input id="sync-zoom" type="checkbox" {% if not compatible %}disabled{% endif %}> Synchronize zoom</label>
+  <button type="button" class="secondary" id="compare-reset">Reset zoom</button>
+</div>
+{% if not compatible %}<p class="notice compare-warning">Aspect ratios differ, so images remain contained without stretching and synchronized zoom is disabled.</p>{% endif %}
+<section id="compare-side-by-side" class="compare-canvas side-by-side">
+  <figure><figcaption><b>{{ 'Exact source' if left.kind == 'source' else 'Original / left' }}</b><span>{{ left.title }} · {{ left.width }}×{{ left.height }}</span></figcaption><div class="compare-viewport" data-compare-viewport><img id="compare-left" class="compare-image" src="{{ left.url }}" alt="Left comparison: {{ left.title }}" draggable="false"></div></figure>
+  <figure><figcaption><b>{{ 'Exact source' if right.kind == 'source' else 'Result / right' }}</b><span>{{ right.title }} · {{ right.width }}×{{ right.height }}</span></figcaption><div class="compare-viewport" data-compare-viewport><img id="compare-right" class="compare-image" src="{{ right.url }}" alt="Right comparison: {{ right.title }}" draggable="false"></div></figure>
+</section>
+<section id="compare-slider-view" class="compare-slider" hidden>
+  <div class="compare-viewport slider-viewport" data-compare-viewport><img class="compare-image" src="{{ left.url }}" alt="Slider base: {{ left.title }}" draggable="false"><div id="compare-overlay" class="compare-overlay" style="--position:50%"><img class="compare-image" src="{{ right.url }}" alt="Slider overlay: {{ right.title }}" draggable="false"></div><span class="slider-divider" aria-hidden="true"></span></div>
+  <label>Comparison position<input id="compare-position" type="range" min="0" max="100" value="50"></label>
+</section>
+<section class="card settings-diff"><h2>Settings difference</h2><div class="diff-grid"><b>Field</b><b>Left</b><b>Right</b>
+  <span>Type</span><span>{{ left.kind }}</span><span>{{ right.kind }}</span>
+  <span>Model</span><span>{{ left.run.model_label }}</span><span>{{ right.run.model_label }}</span>
+  <span>Relation</span><span>{{ left.run.relationship|replace('_',' ') }}</span><span>{{ right.run.relationship|replace('_',' ') }}</span>
+  <span>Size</span><span>{{ left.width }}×{{ left.height }}</span><span>{{ right.width }}×{{ right.height }}</span>
+  <span>Steps</span><span>{{ left.run.parameters.steps }}</span><span>{{ right.run.parameters.steps }}</span>
+  <span>Seed</span><span>{{ left.run.parameters.seed }}</span><span>{{ right.run.parameters.seed }}</span>
+  <span>Prompt</span><span class="full-prompt">{{ left.run.prompt }}</span><span class="full-prompt">{{ right.run.prompt }}</span>
+</div></section>
+{% if left.family_id == right.family_id %}<section class="card preferred-choice"><h2>Preferred version</h2><p>{% if preferred_run_id %}The family currently prefers run {{ preferred_run_id[:8] }}.{% else %}No preferred version is selected yet.{% endif %}</p><div class="action-row">
+  {% if left.kind == 'result' %}<form method="post" action="{{ url_for('preferred_version_view', family_id=left.family_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="run_id" value="{{ left.run_id }}"><input type="hidden" name="left" value="{{ left.token }}"><input type="hidden" name="right" value="{{ right.token }}"><button type="submit" class="secondary">Prefer left version</button></form>{% endif %}
+  {% if right.kind == 'result' %}<form method="post" action="{{ url_for('preferred_version_view', family_id=right.family_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="run_id" value="{{ right.run_id }}"><input type="hidden" name="left" value="{{ left.token }}"><input type="hidden" name="right" value="{{ right.token }}"><button type="submit" class="secondary">Prefer right version</button></form>{% endif %}
+</div></section>{% endif %}
 {% endif %}
+{% else %}<section class="card empty"><h2>Two images are needed</h2><p>Create or transform another version, then return here.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a></section>{% endif %}
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='compare.js') }}" defer></script>{% endblock %}

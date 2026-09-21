@@ -7,6 +7,10 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T18 — Two-version comparison workspace: completed locally
+
+Implemented a source-aware comparison chooser, side-by-side and reveal-slider modes, synchronized zoom when aspect ratios permit, non-distorting contained images, explicit aspect-ratio warnings, a full settings/prompt diff, exact transform-source comparison, and a persistent preferred-version action. Browser verification covers slider behavior, mismatch safeguards, source provenance, phone overflow, and preferred-version persistence. Final suite: `128 passed`.
+
 ### T17 — Source lineage and explicit iteration modes: completed locally
 
 Commit: `8ae3b232f14ff9adb6f8d5f2af4d0da3756915ee`
@@ -345,7 +349,7 @@ R2 status:
 
 ## Next task
 
-T18 — build the two-version compare chooser, side-by-side/slider modes, synchronized zoom, settings diff, aspect warning, and preferred-version action.
+T19 — add favorites, collections, reversible trash, titles, optimistic metadata edits, and PNG/JPEG/WebP/resized/family-ZIP/evidence exports.
 
 ## Constraints carried forward
 
