@@ -9,6 +9,8 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ### T10 — Queue controls and telemetry: completed locally
 
+Commit: `dd33141092a4e140f7cfc6aa60e379a43bf21afc`
+
 Implemented:
 - Compact allowlisted `GET /api/jobs` telemetry exposes job state, timestamps, attempts, sanitized status, and persisted backend progress without exposing submission tokens, receipt paths, workflows, or raw backend payloads.
 - Queued cancellation uses a conditional SQLite state transition. Running cancellation is attempted only when the exact owned ComfyUI prompt is the sole active backend job; otherwise the API returns a safe conflict.
