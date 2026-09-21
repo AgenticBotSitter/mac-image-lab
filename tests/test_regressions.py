@@ -69,7 +69,6 @@ class FakeR2:
         return {"ContentLength": len(value["body"]), "Metadata": value["metadata"]}
 
 
-@pytest.mark.xfail(strict=True, reason="T06 includes reference sources in explicit archives")
 def test_archive_includes_reference_source(tmp_path, monkeypatch):
     run_id = "12345678-1234-1234-1234-123456789abc"
     run = tmp_path / run_id

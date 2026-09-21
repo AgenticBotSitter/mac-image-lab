@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import mimetypes
 import os
 import queue
 import re
@@ -31,6 +30,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from imagelab import storage
 from imagelab.models.registry import registry
+from imagelab.services.archive import archive_evidence
 from imagelab.validation import GenerationRequest, normalize_generation_request
 
 RUNS = ROOT / "runs"
@@ -56,6 +56,9 @@ app.config.update(MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES, SECRET_KEY=os.environ.get
 work_queue: queue.Queue[str] = queue.Queue()
 worker_started = False
 worker_lock = threading.Lock()
+archive_queue: queue.Queue[str] = queue.Queue()
+archive_worker_started = False
+archive_worker_lock = threading.Lock()
 
 
 def now() -> str:
@@ -142,7 +145,7 @@ def save_model_note(model_id: str, note: str) -> None:
         raise ValueError("Personal note must be 5,000 characters or fewer")
     notes = load_model_notes()
     notes[model_id] = note.strip()
-    MODEL_NOTES.write_text(json.dumps(notes, indent=2, sort_keys=True) + "\n")
+    storage.atomic_write_beneath(MODEL_NOTES.parent, MODEL_NOTES.name, (json.dumps(notes, indent=2, sort_keys=True) + "\n").encode())
 
 
 def slug(text: str) -> str:
@@ -157,6 +160,9 @@ def normalize_receipt(r: dict[str, Any], run_id: str) -> dict[str, Any]:
     r.setdefault("parent_run_id", None)
     r.setdefault("library_folder", None)
     r.setdefault("library_copies", [])
+    legacy_status = r.get("status")
+    r.setdefault("generation_state", "succeeded" if legacy_status in {"local_only", "archived", "archive_failed"} else legacy_status or "unknown")
+    r.setdefault("archive_state", "verified" if legacy_status == "archived" else "failed" if legacy_status == "archive_failed" else "local_only")
     r.setdefault("title", slug(r.get("prompt", "image")).replace("-", " ").title())
     model = MODELS.get(r["model_id"], {"label": r["model_id"], "source": "Unknown", "runtime": "Unknown"})
     r["model_label"] = model["label"]
@@ -174,7 +180,7 @@ def read_receipt(run_id: str) -> dict[str, Any]:
 def write_receipt(run_id: str, value: dict[str, Any]) -> None:
     for key in ["model_label", "model_source"]:
         value.pop(key, None)
-    receipt_path(run_id).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    storage.atomic_write_beneath(run_dir(run_id), "receipt.json", (json.dumps(value, indent=2, sort_keys=True) + "\n").encode())
 
 
 def list_runs(limit: int | None = None) -> list[dict[str, Any]]:
@@ -246,6 +252,7 @@ def create_reference_transform(form: dict[str, str], upload: Any) -> str:
             "run_id": run_id,
             "created_at": now(),
             "status": "queued",
+            "generation_state": "queued",
             "title": form.get("title", "").strip() or "Reference transform",
             "model_id": normalized.model_id,
             "profile": normalized.profile,
@@ -322,7 +329,7 @@ def file_run_output(run_id: str, relative: str | None) -> str:
 
 def execute_run(run_id: str) -> None:
     r = read_receipt(run_id)
-    r.update(status="running", started_at=now())
+    r.update(status="running", generation_state="running", started_at=now())
     write_receipt(run_id, r)
     start = time.monotonic()
     result = http_json("/prompt", "POST", {"prompt": r["workflow"], "client_id": f"mac-image-lab-{run_id}"})
@@ -351,7 +358,7 @@ def execute_run(run_id: str) -> None:
     shutil.copy2(source, dest)
     with Image.open(dest) as image:
         r["output"] = {"file": "output.png", "width": image.width, "height": image.height, "mode": image.mode, "sha256": sha256(dest), "bytes": dest.stat().st_size}
-    r.update(status="local_only", completed_at=now(), elapsed_seconds=round(time.monotonic() - start, 3))
+    r.update(status="local_only", generation_state="succeeded", completed_at=now(), elapsed_seconds=round(time.monotonic() - start, 3))
     write_receipt(run_id, r)
     file_run_output(run_id, r.get("library_folder") or "Inbox")
 
@@ -363,7 +370,7 @@ def worker() -> None:
             execute_run(run_id)
         except Exception as exc:
             r = read_receipt(run_id)
-            r.update(status="error", completed_at=now(), error=str(exc))
+            r.update(status="error", generation_state="failed", completed_at=now(), error=str(exc))
             write_receipt(run_id, r)
         finally:
             work_queue.task_done()
@@ -393,47 +400,34 @@ def r2_client():
 
 
 def archive_run(run_id: str) -> dict[str, Any]:
-    r = read_receipt(run_id)
-    if r.get("status") not in {"local_only", "archive_failed", "archived"}:
-        raise RuntimeError("Only completed runs can be archived")
-    r["status"] = "archiving"
-    write_receipt(run_id, r)
-    required = ["output.png", "workflow.json", "receipt.json", "comfy-history.json", "comfy-submit.json"]
-    client = r2_client()
-    result = {"run_id": run_id, "started_at": now(), "objects": []}
-    try:
-        for name in required:
-            p = run_dir(run_id) / name
-            if not p.exists():
-                raise FileNotFoundError(name)
-            digest = sha256(p)
-            key = f"{R2_PREFIX}/{run_id}/{name}"
-            body = p.read_bytes()
-            client.put_object(Bucket=R2_BUCKET, Key=key, Body=body, ContentType=mimetypes.guess_type(str(p))[0] or "application/octet-stream", Metadata={"sha256": digest})
-            head = client.head_object(Bucket=R2_BUCKET, Key=key)
-            if head["ContentLength"] != len(body) or head.get("Metadata", {}).get("sha256") != digest:
-                raise RuntimeError(f"head_object mismatch: {key}")
-            result["objects"].append({"key": key, "bytes": len(body), "sha256": digest, "verified_at": now()})
-        result.update(status="ok", completed_at=now())
-        (run_dir(run_id) / "archive.json").write_text(json.dumps(result, indent=2) + "\n")
-        r["status"] = "archived"
-        r["archive"] = result
-        write_receipt(run_id, r)
-        for name in ["archive.json", "receipt.json"]:
-            p = run_dir(run_id) / name
-            digest = sha256(p)
-            key = f"{R2_PREFIX}/{run_id}/{name}"
-            body = p.read_bytes()
-            client.put_object(Bucket=R2_BUCKET, Key=key, Body=body, ContentType="application/json", Metadata={"sha256": digest})
-            head = client.head_object(Bucket=R2_BUCKET, Key=key)
-            if head["ContentLength"] != len(body) or head.get("Metadata", {}).get("sha256") != digest:
-                raise RuntimeError(f"head_object mismatch: {key}")
-        return r
-    except Exception as exc:
-        r["status"] = "archive_failed"
-        r["archive_error"] = str(exc)
-        write_receipt(run_id, r)
-        raise
+    receipt = read_receipt(run_id)
+    return archive_evidence(
+        run_dir(run_id),
+        receipt,
+        client_factory=r2_client,
+        bucket=R2_BUCKET,
+        prefix=R2_PREFIX,
+        now_fn=now,
+    )
+
+
+def archive_worker() -> None:
+    while True:
+        run_id = archive_queue.get()
+        try:
+            archive_run(run_id)
+        except Exception:
+            pass  # archive_evidence persists a sanitized failed state
+        finally:
+            archive_queue.task_done()
+
+
+def start_archive_worker() -> None:
+    global archive_worker_started
+    with archive_worker_lock:
+        if not archive_worker_started:
+            threading.Thread(target=archive_worker, name="mac-image-lab-archive-worker", daemon=True).start()
+            archive_worker_started = True
 
 
 def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = None) -> str:
@@ -464,6 +458,7 @@ def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = No
         "run_id": run_id,
         "created_at": now(),
         "status": "queued",
+        "generation_state": "queued",
         "title": form.get("title", "").strip() or (parent.get("title") if parent else slug(normalized.prompt).replace("-", " ").title()),
         "model_id": normalized.model_id,
         "profile": normalized.profile,
@@ -620,7 +615,15 @@ def reveal_in_finder(run_id: str):
 @app.post("/runs/<run_id>/archive")
 def archive_view(run_id: str):
     try:
-        archive_run(run_id)
+        value = read_receipt(run_id)
+        generation_state = value.get("generation_state") or ("succeeded" if value.get("status") in {"local_only", "archived", "archive_failed"} else value.get("status"))
+        if generation_state != "succeeded":
+            raise RuntimeError("Only completed generation evidence can be archived")
+        if value.get("archive_state") not in {"queued", "archiving"}:
+            value["archive_state"] = "queued"
+            write_receipt(run_id, value)
+            start_archive_worker()
+            archive_queue.put(run_id)
     except Exception as exc:
         return render_template("error.html", message=f"Archive failed: {exc}"), 502
     return redirect(url_for("run_view", run_id=run_id))

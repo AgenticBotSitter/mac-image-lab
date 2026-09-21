@@ -7,7 +7,25 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T06 — Atomic evidence and complete archival: completed locally
+
+Implemented:
+- Atomic replacement for mutable receipts and model notes.
+- Separate `generation_state` and `archive_state`, with compatibility normalization for legacy receipts. Archive failure no longer turns a successful generation into a failed generation.
+- `imagelab/services/archive.py` snapshots output, workflow, Comfy submission/history, original reference, normalized inference reference, model manifest, and lineage manifest when applicable.
+- Every uploaded evidence object is verified through `head_object` length and SHA-256 metadata. Final receipt and archive manifest are also uploaded and head-verified.
+- Explicit archival is idempotent over deterministic keys. Partial upload, missing evidence, head mismatch, and credential-factory failures persist a sanitized failed archive state and can be retried.
+- Browser archive requests now enqueue bounded archive work and return immediately rather than holding the HTTP request through the transfer.
+- The reference-archive regression is now a normal passing test.
+
+TDD evidence:
+- RED: `tests/test_archive.py` initially failed because `imagelab.services.archive` did not exist; the reference-source regression previously failed under `--runxfail`.
+- GREEN: archive/regression/app target suite `17 passed, 2 xfailed`; full suite `53 passed, 2 xfailed in 0.31s`; Python compile passed.
+- Remaining strict xfails belong to T08 persistent idempotent enqueue and T12 actual-output display.
+
 ### T05 — Model contracts, registry, and Qwen adapter: completed locally
+
+Commit: `3c7eaa2510dd53ac827de53e092a2950b61b9a94`
 
 Implemented:
 - Typed immutable model, backend-job/status, output-artifact, unsupported-operation, and adapter contracts.
@@ -115,7 +133,7 @@ R2 status:
 
 ## Next task
 
-T06 — Make receipts/evidence atomic and archival complete: separate generation/archive state, snapshot original and inference references plus model/lineage manifests, verify every object, make retries idempotent, and remove the archive-completeness strict xfail.
+T07 — Introduce the local SQLite source of truth and idempotent legacy migration with dry-run, malformed-record quarantine, count/hash reconciliation, SQLite backup, and isolated rollback rehearsal.
 
 ## Constraints carried forward
 
