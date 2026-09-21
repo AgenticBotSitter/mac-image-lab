@@ -7,6 +7,17 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T02 — Regression tests: completed
+
+Added `tests/test_regressions.py` with five strict expected-failure tests covering:
+- explicit larger profile versus inherited parent dimensions/steps;
+- transform profile validation before any run/backend writes;
+- reference source inclusion in explicit archives;
+- actual output dimensions in the run detail;
+- duplicate browser submission enqueueing.
+
+RED evidence: `.venv/bin/python -m pytest tests/test_regressions.py --runxfail -q` produced five expected failures and exit 1, each at the confirmed defect. Normal strict-xfail gate: `5 xfailed`. Full suite: `12 passed, 5 xfailed in 0.25s`. These tests are temporary executable debt markers; remove each xfail only with its T03, T06, T08, or T12 fix.
+
 ### T01 — Backup and inventory: completed locally
 
 Implemented:
@@ -49,7 +60,7 @@ R2 status:
 
 ## Next task
 
-T02 — Add focused regression tests for larger-profile inheritance, transform validation before writes, reference-inclusive archive, actual output dimensions, and duplicate enqueue. Keep each expected failure paired with its T03–T06 implementation; do not leave a milestone falsely green.
+T03 — Normalize text and transform generation requests with one validated input path. Remove the first two strict xfails only after they pass normally; add boundary tests for dimensions, area, steps, seeds (including explicit zero), unknown profiles, and larger aspect handling.
 
 ## Constraints carried forward
 
