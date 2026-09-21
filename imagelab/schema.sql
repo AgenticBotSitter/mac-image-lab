@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_queue ON jobs(state, priority, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_run_kind ON jobs(run_id, kind);
 
 CREATE TABLE IF NOT EXISTS job_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

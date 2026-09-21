@@ -7,7 +7,26 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T08 — Persistent generation jobs and standalone worker: completed locally
+
+Implemented:
+- Durable SQLite generation jobs and ordered job events with unique idempotency keys and one generation job per run.
+- Transactional `BEGIN IMMEDIATE` queue claims; an unresolved `submitting`, `running`, or `needs_attention` job blocks the next heavyweight claim.
+- A standalone `imagelab.worker` process with a non-blocking macOS advisory lock, one-shot mode, and injectable execution for tests.
+- Web submissions now persist jobs and return immediately. Importing or running the web app does not create a generation worker thread.
+- Browser retries with the same hidden idempotency key return the original run and do not create a second run directory or job.
+- Text generation, reference transforms, and Explore submissions use the persistent queue; queue depth comes from SQLite.
+- Existing in-memory generation queue and daemon thread were removed. The separate bounded archive queue is unchanged.
+
+TDD evidence:
+- RED: `tests/test_jobs.py` initially failed collection because `imagelab.repositories.jobs` did not exist; the existing duplicate-submit regression remained a strict expected failure. A later running-job test proved the first claim implementation incorrectly claimed a second heavyweight job.
+- GREEN: focused job/regression suite `9 passed`; full suite `69 passed, 1 xfailed in 0.42s`; compile and diff checks passed.
+- The remaining strict xfail belongs to T12 actual-output display.
+- No live worker or service cutover was performed; that remains behind the T20 approval checkpoint.
+
 ### T07 — SQLite source of truth and legacy migration: completed locally
+
+Commit: `27bb90db201d379a4922a797fa174c71640260c0`
 
 Implemented:
 - Versioned SQLite schema with WAL, foreign keys, busy timeout, indexed runs/families/states, jobs/events, collections, model notes, recipes, family choices, and archive attempts.
@@ -156,7 +175,7 @@ R2 status:
 
 ## Next task
 
-T08 — Persist jobs and split the generation worker: transactional idempotent enqueue, atomic claim, independent worker process, duplicate-submit protection, and restart-surviving queue state.
+T09 — Reconcile interrupted and long-running backend work without duplicate submission: persist submission boundaries, correlate ComfyUI queue/history, recover completed work, and mark ambiguous ownership `needs_attention`.
 
 ## Constraints carried forward
 

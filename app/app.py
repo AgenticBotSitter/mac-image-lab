@@ -31,8 +31,10 @@ if str(ROOT) not in sys.path:
 from imagelab import storage
 from imagelab.db import connect_database, initialize_database
 from imagelab.models.registry import registry
+from imagelab.repositories.jobs import JobRepository
 from imagelab.repositories.runs import RunRepository
 from imagelab.services.archive import archive_evidence
+from imagelab.services.generation import enqueue_generation, queue_depth
 from imagelab.validation import GenerationRequest, normalize_generation_request
 
 RUNS = ROOT / "runs"
@@ -55,9 +57,6 @@ PROFILES = {key: dict(value) for key, value in registry.get("qwen-image-2.1-loca
 
 app = Flask(__name__)
 app.config.update(MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES, SECRET_KEY=os.environ.get("MAC_IMAGE_LAB_SESSION_KEY", "local-only-no-auth"))
-work_queue: queue.Queue[str] = queue.Queue()
-worker_started = False
-worker_lock = threading.Lock()
 archive_queue: queue.Queue[str] = queue.Queue()
 archive_worker_started = False
 archive_worker_lock = threading.Lock()
@@ -65,6 +64,9 @@ archive_worker_lock = threading.Lock()
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+app.jinja_env.globals["new_idempotency_key"] = lambda: str(uuid.uuid4())
 
 
 def sha256(path: Path) -> str:
@@ -317,6 +319,7 @@ def create_reference_transform(form: dict[str, str], upload: Any) -> str:
         storage.atomic_write_beneath(stage, "receipt.json", (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
         backend_path = storage.atomic_write_beneath(COMFY_ROOT / "input", ref_name, ingested.derivative_bytes)
         os.replace(stage, final)
+        write_receipt(run_id, receipt)
         return run_id
     except Exception:
         shutil.rmtree(stage, ignore_errors=True)
@@ -387,25 +390,22 @@ def execute_run(run_id: str) -> None:
     file_run_output(run_id, r.get("library_folder") or "Inbox")
 
 
-def worker() -> None:
-    while True:
-        run_id = work_queue.get()
-        try:
-            execute_run(run_id)
-        except Exception as exc:
-            r = read_receipt(run_id)
-            r.update(status="error", generation_state="failed", completed_at=now(), error=str(exc))
-            write_receipt(run_id, r)
-        finally:
-            work_queue.task_done()
+def enqueue_run(run_id: str, idempotency_key: str) -> dict[str, Any]:
+    job, _created = enqueue_generation(database_path(), run_id, idempotency_key)
+    return job
 
 
-def start_worker() -> None:
-    global worker_started
-    with worker_lock:
-        if not worker_started:
-            threading.Thread(target=worker, name="mac-image-lab-worker", daemon=True).start()
-            worker_started = True
+def existing_submission(idempotency_key: str) -> dict[str, Any] | None:
+    db = database_path()
+    if not db.exists():
+        return None
+    with connect_database(db) as connection:
+        return JobRepository(connection).get_by_idempotency_key(idempotency_key)
+
+
+def request_idempotency_key() -> str:
+    key = (request.form.get("idempotency_key") or "").strip()
+    return key or str(uuid.uuid4())
 
 
 def r2_client():
@@ -542,9 +542,12 @@ def transform_view():
 @app.post("/transform")
 def transform_submit():
     try:
+        key = request_idempotency_key()
+        existing = existing_submission(key)
+        if existing is not None:
+            return redirect(url_for("run_view", run_id=existing["run_id"]))
         run_id = create_reference_transform(request.form, request.files.get("reference"))
-        start_worker()
-        work_queue.put(run_id)
+        enqueue_run(run_id, key)
         return redirect(url_for("run_view", run_id=run_id))
     except (ValueError, OSError, Image.UnidentifiedImageError) as exc:
         return render_template("error.html", message=str(exc)), 400
@@ -572,15 +575,18 @@ def healthz():
         comfy = True
     except (URLError, TimeoutError, OSError):
         pass
-    return jsonify({"status": "ok", "host": HOST, "port": PORT, "loopback_only": True, "share_enabled": False, "comfyui_reachable": comfy, "queue_depth": work_queue.qsize(), "available_models": [key for key, value in MODELS.items() if value["status"] == "available"]})
+    return jsonify({"status": "ok", "host": HOST, "port": PORT, "loopback_only": True, "share_enabled": False, "comfyui_reachable": comfy, "queue_depth": queue_depth(database_path()), "available_models": [key for key, value in MODELS.items() if value["status"] == "available"]})
 
 
 @app.post("/generate")
 def generate():
     try:
+        key = request_idempotency_key()
+        existing = existing_submission(key)
+        if existing is not None:
+            return redirect(url_for("run_view", run_id=existing["run_id"]))
         run_id = validate_and_create(request.form)
-        start_worker()
-        work_queue.put(run_id)
+        enqueue_run(run_id, key)
         return redirect(url_for("run_view", run_id=run_id))
     except (ValueError, OSError) as exc:
         return render_template("error.html", message=str(exc)), 400
@@ -601,10 +607,13 @@ def explore_view(run_id: str):
 @app.post("/runs/<run_id>/explore")
 def explore_submit(run_id: str):
     try:
+        key = request_idempotency_key()
+        existing = existing_submission(key)
+        if existing is not None:
+            return redirect(url_for("run_view", run_id=existing["run_id"]))
         parent = read_receipt(run_id)
         new_run = validate_and_create(request.form, parent=parent)
-        start_worker()
-        work_queue.put(new_run)
+        enqueue_run(new_run, key)
         return redirect(url_for("run_view", run_id=new_run))
     except (ValueError, OSError) as exc:
         return render_template("error.html", message=str(exc)), 400
@@ -675,5 +684,4 @@ if __name__ == "__main__":
     if HOST != "127.0.0.1":
         raise RuntimeError("Mac Image Lab must bind loopback only")
     ensure_library()
-    start_worker()
-    app.run(host=HOST, port=PORT, debug=False, use_reloader=False)
+    app.run(host=HOST, port=PORT, debug=False, use_reloader=False, threaded=True)

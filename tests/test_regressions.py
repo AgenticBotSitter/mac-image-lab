@@ -1,7 +1,6 @@
 import importlib.util
 import io
 import json
-import queue
 from pathlib import Path
 
 import pytest
@@ -119,13 +118,9 @@ def test_run_detail_displays_actual_output_dimensions(tmp_path, monkeypatch):
     assert "1024×896" in response.get_data(as_text=True)
 
 
-@pytest.mark.xfail(strict=True, reason="T08 adds persistent idempotent enqueue")
-def test_duplicate_generate_submission_enqueues_once(monkeypatch):
-    run_id = "12345678-1234-1234-1234-123456789abc"
-    isolated_queue = queue.Queue()
-    monkeypatch.setattr(lab, "work_queue", isolated_queue)
-    monkeypatch.setattr(lab, "validate_and_create", lambda form: run_id)
-    monkeypatch.setattr(lab, "start_worker", lambda: None)
+def test_duplicate_generate_submission_enqueues_once(tmp_path, monkeypatch):
+    runs = tmp_path / "runs"
+    monkeypatch.setattr(lab, "RUNS", runs)
     client = lab.app.test_client()
     form = {"prompt": "one", "idempotency_key": "same-browser-submit"}
 
@@ -134,4 +129,10 @@ def test_duplicate_generate_submission_enqueues_once(monkeypatch):
 
     assert first.status_code == 302
     assert second.status_code == 302
-    assert isolated_queue.qsize() == 1
+    assert first.headers["Location"] == second.headers["Location"]
+    connection = lab.initialize_database(lab.database_path())
+    try:
+        assert lab.JobRepository(connection).count(state="queued") == 1
+    finally:
+        connection.close()
+    assert len([path for path in runs.iterdir() if path.is_dir()]) == 1
