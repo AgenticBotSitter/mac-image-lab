@@ -7,7 +7,25 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T03 — Normalize generation requests: completed locally
+
+Implemented:
+- Immutable `GenerationRequest` and one pure normalization path in `imagelab/validation.py`.
+- Explicit profiles now override parent dimensions/steps; variation/repeat inheritance is action-specific.
+- Explicit seed `0` is preserved; repeat may reuse a parent seed; variation gets a fresh seed.
+- Dimensions, 32-pixel alignment, steps, seed, model, profile, action, and validated pixel-area ceiling are checked before run files are created.
+- Regenerate-larger preserves square, portrait, or landscape aspect ratio while increasing pixel area within the selected validated profile.
+- Text and reference-transform requests use the same normalizer. Unknown transform profiles now fail before run/backend writes.
+- Explore submits an explicit `variation` or `regenerate_larger` action.
+
+TDD evidence:
+- RED: `tests/test_validation.py` initially failed collection because the module did not exist; the two paired regression tests previously failed under `--runxfail`.
+- GREEN: targeted tests `14 passed, 3 xfailed`; full suite `26 passed, 3 xfailed in 0.25s`; Python compile passed.
+- Remaining strict xfails belong to T06 archive completeness, T08 idempotent persistent enqueue, and T12 actual-output display.
+
 ### T02 — Regression tests: completed
+
+Commit: `3ca2e8bd1a05aed12a5b5030755a7c418f16246e`
 
 Added `tests/test_regressions.py` with five strict expected-failure tests covering:
 - explicit larger profile versus inherited parent dimensions/steps;
@@ -19,6 +37,8 @@ Added `tests/test_regressions.py` with five strict expected-failure tests coveri
 RED evidence: `.venv/bin/python -m pytest tests/test_regressions.py --runxfail -q` produced five expected failures and exit 1, each at the confirmed defect. Normal strict-xfail gate: `5 xfailed`. Full suite: `12 passed, 5 xfailed in 0.25s`. These tests are temporary executable debt markers; remove each xfail only with its T03, T06, T08, or T12 fix.
 
 ### T01 — Backup and inventory: completed locally
+
+Commit: `b3fddd8147894fec9096a988c810164368172049`
 
 Implemented:
 - Read-only, JSON diagnostics at `scripts/verify_install.py`.
@@ -60,7 +80,7 @@ R2 status:
 
 ## Next task
 
-T03 — Normalize text and transform generation requests with one validated input path. Remove the first two strict xfails only after they pass normally; add boundary tests for dimensions, area, steps, seeds (including explicit zero), unknown profiles, and larger aspect handling.
+T04 — Harden reference-image ingestion: compressed and decoded pixel limits, Pillow bomb handling, full decode, animation rejection, EXIF transpose derivative, original/derivative hashes, staged atomic writes, safe cleanup, and upload failure tests.
 
 ## Constraints carried forward
 

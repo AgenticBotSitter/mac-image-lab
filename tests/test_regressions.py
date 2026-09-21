@@ -22,7 +22,6 @@ def png_upload() -> FileStorage:
     return FileStorage(stream=data, filename="reference.png", content_type="image/png")
 
 
-@pytest.mark.xfail(strict=True, reason="T03 normalizes explicit profile before parent defaults")
 def test_larger_profile_overrides_parent_dimensions(tmp_path, monkeypatch):
     monkeypatch.setattr(lab, "RUNS", tmp_path)
     parent_id = "12345678-1234-1234-1234-123456789abc"
@@ -44,7 +43,6 @@ def test_larger_profile_overrides_parent_dimensions(tmp_path, monkeypatch):
     assert receipt["parameters"]["steps"] == lab.PROFILES["maximum"]["steps"]
 
 
-@pytest.mark.xfail(strict=True, reason="T03 validates transform profile and parameters before writes")
 def test_transform_rejects_unknown_profile_before_writes(tmp_path, monkeypatch):
     runs = tmp_path / "runs"
     comfy = tmp_path / "comfy"

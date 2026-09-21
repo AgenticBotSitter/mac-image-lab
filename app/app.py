@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import mimetypes
 import os
@@ -10,6 +11,7 @@ import queue
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -26,6 +28,10 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, sen
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from imagelab.validation import normalize_generation_request
+
 RUNS = ROOT / "runs"
 REFERENCES = ROOT / "references"
 MODEL_NOTES = ROOT / "model-notes.json"
@@ -238,19 +244,74 @@ def build_reference_edit_workflow(prompt: str, steps: int, seed: int, resolution
 
 
 def create_reference_transform(form: dict[str, str], upload: Any) -> str:
-    prompt = form.get("prompt", "").strip()
-    if not prompt or len(prompt) > 4000: raise ValueError("Edit instruction must be 1–4000 characters")
-    if not upload or upload.mimetype not in IMAGE_TYPES: raise ValueError("Upload a PNG, JPEG, or WebP image")
+    normalized = normalize_generation_request(
+        {**form, "action": "reference_transform"},
+        profiles=PROFILES,
+        available_models={key for key, value in MODELS.items() if value["status"] == "available"},
+    )
+    if not upload or upload.mimetype not in IMAGE_TYPES:
+        raise ValueError("Upload a PNG, JPEG, or WebP image")
     data = upload.read()
-    if not data or len(data) > MAX_UPLOAD_BYTES: raise ValueError("Image must be non-empty and 20 MiB or smaller")
-    with Image.open(__import__('io').BytesIO(data)) as im: width,height=im.size
-    run_id=str(uuid.uuid4()); d=RUNS/run_id; d.mkdir(parents=True); suffix={"image/png":".png","image/jpeg":".jpg","image/webp":".webp"}[upload.mimetype]
-    ref_name=f"mac-image-lab-reference-{run_id}{suffix}"; (d / ("reference" + suffix)).write_bytes(data); (COMFY_ROOT/"input"/ref_name).write_bytes(data)
-    profile=form.get("profile","fast"); p=PROFILES.get(profile,PROFILES["fast"]); steps=int(form.get("steps") or p["steps"]); seed=int(form.get("seed") or int.from_bytes(os.urandom(4),"big")); workflow=build_reference_edit_workflow(prompt,steps,seed,p["resolution"],f"mac-image-lab-{run_id}",ref_name)
-    (d/"workflow.json").write_text(json.dumps(workflow,indent=2)+"\n")
-    folder=safe_library_rel(form.get("library_folder") or "Inbox")
-    receipt={"schema_version":2,"run_id":run_id,"created_at":now(),"status":"queued","title":form.get("title","").strip() or "Reference transform","model_id":"qwen-image-2.1-local","profile":profile,"prompt":prompt,"parameters":{"width":width,"height":height,"steps":steps,"seed":seed,"sampler":"euler","scheduler":"simple","cfg":1.0,"resolution":p["resolution"]},"workflow":workflow,"family_id":run_id,"parent_run_id":None,"library_folder":folder,"library_copies":[],"archive_state":"local_only","reference_edit":{"enabled":True,"experimental":True,"preservation":"best effort; do not promise exact likeness","source_file":"reference"+suffix,"source_sha256":hashlib.sha256(data).hexdigest()}}
-    write_receipt(run_id,receipt); return run_id
+    if not data or len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError("Image must be non-empty and 20 MiB or smaller")
+    with Image.open(io.BytesIO(data)) as image:
+        source_width, source_height = image.size
+    folder = safe_library_rel(form.get("library_folder") or "Inbox")
+
+    run_id = str(uuid.uuid4())
+    d = RUNS / run_id
+    d.mkdir(parents=True)
+    suffix = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[upload.mimetype]
+    ref_name = f"mac-image-lab-reference-{run_id}{suffix}"
+    (d / ("reference" + suffix)).write_bytes(data)
+    (COMFY_ROOT / "input" / ref_name).write_bytes(data)
+    workflow = build_reference_edit_workflow(
+        normalized.prompt,
+        normalized.steps,
+        normalized.seed,
+        normalized.resolution,
+        f"mac-image-lab-{run_id}",
+        ref_name,
+    )
+    (d / "workflow.json").write_text(json.dumps(workflow, indent=2) + "\n")
+    receipt = {
+        "schema_version": 2,
+        "run_id": run_id,
+        "created_at": now(),
+        "status": "queued",
+        "title": form.get("title", "").strip() or "Reference transform",
+        "model_id": normalized.model_id,
+        "profile": normalized.profile,
+        "prompt": normalized.prompt,
+        "parameters": {
+            "width": normalized.width,
+            "height": normalized.height,
+            "steps": normalized.steps,
+            "seed": normalized.seed,
+            "sampler": "euler",
+            "scheduler": "simple",
+            "cfg": 1.0,
+            "resolution": normalized.resolution,
+        },
+        "workflow": workflow,
+        "family_id": run_id,
+        "parent_run_id": None,
+        "relationship": "reference_transform",
+        "library_folder": folder,
+        "library_copies": [],
+        "archive_state": "local_only",
+        "reference_edit": {
+            "enabled": True,
+            "experimental": True,
+            "preservation": "best effort; do not promise exact likeness",
+            "source_file": "reference" + suffix,
+            "source_width": source_width,
+            "source_height": source_height,
+            "source_sha256": hashlib.sha256(data).hexdigest(),
+        },
+    }
+    write_receipt(run_id, receipt)
+    return run_id
 
 
 def http_json(path: str, method: str = "GET", data: dict[str, Any] | None = None, timeout: int = 30) -> dict[str, Any]:
@@ -396,35 +457,61 @@ def archive_run(run_id: str) -> dict[str, Any]:
 
 
 def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = None) -> str:
-    prompt = form.get("prompt", "").strip()
-    if not prompt or len(prompt) > 4000:
-        raise ValueError("Prompt must be 1–4000 characters")
-    model_id = form.get("model_id", parent.get("model_id") if parent else "qwen-image-2.1-local")
-    model_for(model_id)
-    profile = form.get("profile", parent.get("profile") if parent else "fast")
-    if profile not in PROFILES:
-        raise ValueError("Unknown profile")
-    profile_values = PROFILES[profile]
-    fallback = parent.get("parameters", {}) if parent else {}
-    width = int(form.get("width") or fallback.get("width") or profile_values["width"])
-    height = int(form.get("height") or fallback.get("height") or profile_values["height"])
-    steps = int(form.get("steps") or fallback.get("steps") or profile_values["steps"])
-    seed = int(form.get("seed") or int.from_bytes(os.urandom(4), "big"))
-    if width < 512 or height < 512 or width > 2752 or height > 2752 or width % 32 or height % 32:
-        raise ValueError("Dimensions must be 512–2752 and multiples of 32")
-    if not 1 <= steps <= 80:
-        raise ValueError("Steps must be 1–80")
-    if not 0 <= seed <= 2**63 - 1:
-        raise ValueError("Seed out of range")
+    normalized = normalize_generation_request(
+        form,
+        profiles=PROFILES,
+        available_models={key for key, value in MODELS.items() if value["status"] == "available"},
+        parent=parent,
+    )
     folder = safe_library_rel(form.get("library_folder") or (parent.get("library_folder") if parent else "Inbox"))
     run_id = str(uuid.uuid4())
     d = RUNS / run_id
     d.mkdir(parents=True, exist_ok=False)
-    resolution = profile_values["resolution"]
-    workflow = build_workflow(prompt, width, height, steps, seed, resolution, f"mac-image-lab-{run_id}", model_id)
+    workflow = build_workflow(
+        normalized.prompt,
+        normalized.width,
+        normalized.height,
+        normalized.steps,
+        normalized.seed,
+        normalized.resolution,
+        f"mac-image-lab-{run_id}",
+        normalized.model_id,
+    )
     (d / "workflow.json").write_text(json.dumps(workflow, indent=2) + "\n")
     family_id = parent["family_id"] if parent else run_id
-    receipt = {"schema_version": 2, "run_id": run_id, "created_at": now(), "status": "queued", "title": form.get("title", "").strip() or (parent.get("title") if parent else slug(prompt).replace("-", " ").title()), "model_id": model_id, "profile": profile, "prompt": prompt, "parameters": {"width": width, "height": height, "steps": steps, "seed": seed, "sampler": "euler", "scheduler": "simple", "cfg": 1.0, "resolution": resolution}, "workflow": workflow, "models": {"unet": "qwen_image_2.1_int8_convrot.safetensors", "text_encoder": "qwen3vl_8b_int8_convrot.safetensors", "vae": "qwen_image_2.1_vae_bf16.safetensors"}, "family_id": family_id, "parent_run_id": parent["run_id"] if parent else None, "library_folder": folder, "library_copies": [], "archive_state": "local_only", "reference_edit": {"enabled": False, "reason": "No tested Qwen reference/edit graph is installed."}}
+    receipt = {
+        "schema_version": 2,
+        "run_id": run_id,
+        "created_at": now(),
+        "status": "queued",
+        "title": form.get("title", "").strip() or (parent.get("title") if parent else slug(normalized.prompt).replace("-", " ").title()),
+        "model_id": normalized.model_id,
+        "profile": normalized.profile,
+        "prompt": normalized.prompt,
+        "parameters": {
+            "width": normalized.width,
+            "height": normalized.height,
+            "steps": normalized.steps,
+            "seed": normalized.seed,
+            "sampler": "euler",
+            "scheduler": "simple",
+            "cfg": 1.0,
+            "resolution": normalized.resolution,
+        },
+        "workflow": workflow,
+        "models": {
+            "unet": "qwen_image_2.1_int8_convrot.safetensors",
+            "text_encoder": "qwen3vl_8b_int8_convrot.safetensors",
+            "vae": "qwen_image_2.1_vae_bf16.safetensors",
+        },
+        "family_id": family_id,
+        "parent_run_id": parent["run_id"] if parent else None,
+        "relationship": normalized.action,
+        "library_folder": folder,
+        "library_copies": [],
+        "archive_state": "local_only",
+        "reference_edit": {"enabled": False, "reason": "This run was created without a reference image."},
+    }
     write_receipt(run_id, receipt)
     return run_id
 
