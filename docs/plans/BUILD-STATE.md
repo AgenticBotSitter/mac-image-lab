@@ -11,6 +11,9 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 Pinned Waitress `3.0.2`, added a fail-closed production runner, added owner-only session-key-file loading for the worker, and prepared three loopback-only LaunchAgent templates for Waitress, the generation worker, and ComfyUI. The templates contain no credential values and passed `plutil -lint`. `docs/operations.md` records drain, backup, cutover, verification, and rollback procedures. Current service inspection found the web app and ComfyUI running manually and no supervised generation worker; none of the live processes, installed LaunchAgents, Tailscale routing, or ports were changed.
 
+Commit: `ebc37c7fe66c5124fefd4c5152672bb0e6549ff9`.
+R2 pre-cutover bundle: `hermes-data/Marvin/Mac Image Lab/builds/t20-precutover/2026-09-21/mac-image-lab-t20-precutover.bundle` — SHA-256 `f5805e1a0950004739ce3438c0ebd012a78c2db31d8e80888f9c3d1f6b0e588b`; `head_object` verified.
+
 Verification: install tests `8 passed`; full suite `142 passed`; Python compilation and `git diff --check` passed.
 
 **Checkpoint:** explicit Alastair approval is required before copying templates into `~/Library/LaunchAgents`, provisioning the session key, stopping manual services, or bootstrapping the replacements.
