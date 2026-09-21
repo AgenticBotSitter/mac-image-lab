@@ -1,37 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Create · Mac Image Lab{% endblock %}
+{% block title %}{{ 'Transform' if mode == 'transform' else 'Create' }} · Mac Image Lab{% endblock %}
 {% block content %}
-<header class="page-head"><div><p class="eyebrow">LOCAL GENERATION</p><h1>Create</h1><p>One explicit submission creates one durable local job.</p></div><a class="button secondary" href="{{ url_for('transform_view') }}">Transform an image</a></header>
-<section class="two-col">
-  <section class="card">
-    <h2>New image</h2>
-    <form method="post" action="/generate">
+<header class="page-head create-head">
+  <div><p class="eyebrow">LOCAL GENERATION</p><h1>{{ 'Transform' if mode == 'transform' else 'Create' }}</h1><p>{% if mode == 'transform' %}Make one controlled change to a source image. Subject retention remains best effort.{% else %}One explicit submission creates one durable local job.{% endif %}</p></div>
+  <div class="mode-tabs" aria-label="Generation mode"><a href="{{ url_for('create_view') }}" {% if mode == 'text' %}aria-current="page"{% endif %}>Text</a><a href="{{ url_for('transform_view') }}" {% if mode == 'transform' %}aria-current="page"{% endif %}>Transform</a></div>
+</header>
+<section class="two-col create-layout">
+  <section class="card create-card">
+    <form id="generation-form" method="post" action="{{ url_for('transform_submit') if mode == 'transform' else url_for('generate') }}" {% if mode == 'transform' %}enctype="multipart/form-data"{% endif %}>
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="idempotency_key" value="{{ new_idempotency_key() }}">
-      <label>Local image generator
-        <select name="model_id">{% for id, model in models.items() if model.status == 'available' %}<option value="{{ id }}">{{ model.label }} · {{ model.runtime }}</option>{% endfor %}</select>
-      </label>
-      <label>Prompt<textarea name="prompt" required maxlength="4000" placeholder="Describe the finished frame, subject, setting, materials, lighting, and composition."></textarea></label>
-      <div class="form-grid">
-        <label>Quality profile<select name="profile">{% for key,p in profiles.items() %}<option value="{{ key }}">{{ p.label }} · {{ p.width }}×{{ p.height }} · {{ p.steps }} steps</option>{% endfor %}</select></label>
-        <label>Collection<select name="library_folder">{% for folder in folders %}<option value="{{ folder }}">{{ folder }}</option>{% endfor %}</select></label>
+      <input type="hidden" name="action" value="{{ 'reference_transform' if mode == 'transform' else 'original' }}">
+      {% if source_run_id %}<input type="hidden" name="source_run_id" value="{{ source_run_id }}">{% endif %}
+      {% if mode == 'transform' %}
+      {% if source_run and source_run.output %}<div class="selected-source"><img src="{{ url_for('thumbnail', run_id=source_run.run_id, size=320) }}" alt="Selected source {{ source_run.title }}"><div><p class="eyebrow">SELECTED LIBRARY SOURCE</p><h2>{{ source_run.title }}</h2><p class="sub">The transform will become a child in family {{ source_run.family_id[:8] }}. Choosing a file below replaces this selection with a new external source.</p></div></div>{% endif %}
+      <div id="upload-dropzone" class="upload-dropzone">
+        <label for="reference">{{ 'Replace source with an upload' if source_run else 'Source image' }}</label>
+        <p>Drop a PNG, JPEG, or WebP here, or choose a file. Maximum 20 MiB. HEIC is not supported; export it as JPEG first.</p>
+        <input id="reference" type="file" name="reference" accept="image/png,image/jpeg,image/webp" {% if not source_run %}required{% endif %}>
       </div>
-      <details class="advanced"><summary>Advanced controls</summary><div class="form-grid">
-        <label>Width<input name="width" type="number" min="512" max="2752" step="32"></label>
-        <label>Height<input name="height" type="number" min="512" max="2752" step="32"></label>
+      <div id="upload-preview" class="upload-preview" hidden><img alt="Selected source preview"><div><b id="upload-metadata"></b><p class="sub">Private local source · remove or replace before submitting</p><button type="button" class="secondary" id="remove-upload">Remove source image</button></div></div>
+      {% endif %}
+      <div class="recipe-picker">
+        <label for="recipe">Starting recipe</label>
+        <div class="inline-controls"><select id="recipe">{% for recipe in recipes %}<option value="{{ recipe.id }}" data-prompt="{{ recipe.prompt }}" data-profile="{{ recipe.profile }}" data-aspect="{{ recipe.aspect }}" data-model="{{ recipe.model_id|default('qwen-image-2.1-local') }}" data-collection="{{ recipe.collection|default('') }}">{{ recipe.name }}{% if not recipe.builtin %} · Saved{% endif %}</option>{% endfor %}</select><button type="button" class="secondary" id="apply-recipe">Use recipe</button></div>
+        <p id="recipe-status" class="sub" role="status">Recipes fill controls but never start generation.</p>
+      </div>
+      <label for="prompt">{{ 'What should change?' if mode == 'transform' else 'Prompt' }}<textarea id="prompt" name="prompt" required maxlength="4000">{{ recipes[0].prompt if recipes else '' }}</textarea></label>
+      <label for="model-id">Local image generator
+        <select id="model-id" name="model_id">{% for id, model in models.items() if model.status == 'available' %}<option value="{{ id }}">{{ model.label }} · {{ model.runtime }}</option>{% endfor %}</select>
+      </label>
+      <div class="form-grid">
+        <label for="profile">Quality<select id="profile" name="profile">{% for key,p in profiles.items() %}<option value="{{ key }}" data-expected="{{ p.expected }}" data-square-width="{{ aspects[key]['square'][0] }}" data-square-height="{{ aspects[key]['square'][1] }}" data-portrait-width="{{ aspects[key]['portrait'][0] }}" data-portrait-height="{{ aspects[key]['portrait'][1] }}" data-landscape-width="{{ aspects[key]['landscape'][0] }}" data-landscape-height="{{ aspects[key]['landscape'][1] }}">{{ p.label }} · {{ p.steps }} steps</option>{% endfor %}</select></label>
+        <label for="aspect">Aspect<select id="aspect" name="aspect"><option value="square">Square</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option><option value="custom">Custom</option></select></label>
+        <label for="library-folder">Collection<select id="library-folder" name="library_folder">{% for folder in folders %}<option value="{{ folder }}">{{ folder }}</option>{% endfor %}</select></label>
+      </div>
+      <div id="queue-estimate" class="queue-estimate" role="status" data-active-jobs="{{ active_jobs }}"></div>
+      <details class="advanced"><summary>Advanced controls <span id="override-indicator"></span></summary><div class="form-grid">
+        <label>Width<input name="width" type="number" min="512" max="2752" step="32" value="768"></label>
+        <label>Height<input name="height" type="number" min="512" max="2752" step="32" value="768"></label>
         <label>Steps<input name="steps" type="number" min="1" max="80"></label>
         <label>Seed<input name="seed" type="number" min="0"></label>
       </div></details>
-      <button type="submit">Queue generation</button>
+      <button id="generation-submit" type="submit">{{ 'Queue transform' if mode == 'transform' else 'Queue generation' }}</button>
     </form>
+    <details class="save-recipe"><summary>Save these controls as a named recipe</summary>
+      <form id="save-recipe-form" method="post" action="{{ url_for('recipe_save_view') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="{{ mode }}">
+        <input type="hidden" name="model_id"><input type="hidden" name="prompt"><input type="hidden" name="profile"><input type="hidden" name="aspect"><input type="hidden" name="library_folder">
+        <label>Recipe name<input name="name" required maxlength="120"></label><label>Description<input name="description" maxlength="500"></label><button type="submit" class="secondary">Save named recipe</button>
+      </form>
+    </details>
   </section>
-  <aside class="card guide">
-    <p class="eyebrow">SELECTED MODEL GUIDE</p><h2>Qwen-Image-2.1</h2>
-    <p>{{ models['qwen-image-2.1-local'].guide.summary }}</p>
-    <h3>Strong at</h3><ul>{% for item in models['qwen-image-2.1-local'].guide.strengths %}<li>{{ item }}</li>{% endfor %}</ul>
-    <h3>Avoid</h3><ul>{% for item in models['qwen-image-2.1-local'].guide.avoid %}<li>{{ item }}</li>{% endfor %}</ul>
-    <p><a href="{{ url_for('styles') }}">Open style guides</a></p>
-    <details><summary>Personal notes</summary><form method="post" action="/models/qwen-image-2.1-local/notes"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><textarea name="note" maxlength="5000">{{ model_notes.get('qwen-image-2.1-local','') }}</textarea><button type="submit" class="secondary">Save notes</button></form></details>
+  <aside class="create-sidebar">
+    {% if mode == 'transform' %}<section class="card guide"><p class="eyebrow">BEST EFFORT EDITING</p><h2>Change one thing</h2><p>Identity, objects, typography, and composition may drift. Review every result before keeping or sharing it.</p></section>{% endif %}
+    {% for id, model in models.items() if model.status == 'available' %}<section class="card guide model-guide" data-model-guide="{{ id }}" {% if not loop.first %}hidden{% endif %}>
+      <p class="eyebrow">SELECTED MODEL GUIDE</p><h2>{{ model.label }}</h2><p>{{ model.guide.summary }}</p>
+      <h3>Strong at</h3><ul>{% for item in model.guide.strengths %}<li>{{ item }}</li>{% endfor %}</ul><h3>Avoid</h3><ul>{% for item in model.guide.avoid %}<li>{{ item }}</li>{% endfor %}</ul>
+      <details><summary>Personal notes</summary><form method="post" action="{{ url_for('model_notes_view', model_id=id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ model_notes[id].revision }}"><textarea name="note" maxlength="5000">{{ model_notes[id].note }}</textarea><button type="submit" class="secondary">Save notes</button></form></details>
+    </section>{% endfor %}
   </aside>
 </section>
 {% endblock %}

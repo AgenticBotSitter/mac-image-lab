@@ -33,6 +33,7 @@ from imagelab import storage
 from imagelab.db import connect_database, initialize_database
 from imagelab.models.registry import registry
 from imagelab.repositories.jobs import JobRepository
+from imagelab.repositories.preferences import PreferenceConflict, PreferenceRepository
 from imagelab.repositories.runs import RunRepository
 from imagelab.services.archive import archive_evidence
 from imagelab.services.generation import enqueue_generation, queue_depth
@@ -59,6 +60,17 @@ IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 MODELS: dict[str, dict[str, Any]] = registry.legacy_view()
 PROFILES = {key: dict(value) for key, value in registry.get("qwen-image-2.1-local").profiles.items()}
+ASPECT_DIMENSIONS = {
+    "fast": {"square": (768, 768), "portrait": (672, 896), "landscape": (896, 672)},
+    "standard": {"square": (1024, 1024), "portrait": (896, 1152), "landscape": (1152, 896)},
+    "maximum": {"square": (2048, 2048), "portrait": (1696, 2528), "landscape": (2528, 1696)},
+}
+BUILTIN_RECIPES = [
+    {"id": "studio-product", "name": "Studio product portrait", "mode": "text", "prompt": "A refined studio product portrait of [subject], centered against a warm neutral background. Describe the exact materials, surface texture, directional soft light, restrained palette, and clean composition.", "profile": "fast", "aspect": "square"},
+    {"id": "editorial-landscape", "name": "Editorial landscape", "mode": "text", "prompt": "A wide editorial photograph of [subject and setting], with a clear foreground, middle distance, and background. Natural directional light, realistic materials, balanced negative space, and a restrained color palette.", "profile": "fast", "aspect": "landscape"},
+    {"id": "scene-change", "name": "Scene or background change", "mode": "transform", "prompt": "Change only the background and setting. Preserve the main people or objects, their relative placement, and the overall composition where possible.", "profile": "fast", "aspect": "square"},
+    {"id": "storybook", "name": "Storybook illustration", "mode": "transform", "prompt": "Reinterpret this as a hand-painted storybook animation illustration. Preserve the people or objects and their relationships where possible.", "profile": "fast", "aspect": "square"},
+]
 
 app = create_app(
     __name__,
@@ -251,16 +263,49 @@ def build_reference_edit_workflow(prompt: str, steps: int, seed: int, resolution
     return registry.adapter(model_id).build_workflow(request_value, prefix=prefix, input_name=input_name)
 
 
-def create_reference_transform(form: dict[str, str], upload: Any) -> str:
+def create_reference_transform(form: dict[str, str], upload: Any, *, parent: dict[str, Any] | None = None) -> str:
+    action = str(form.get("action") or "reference_transform")
     normalized = normalize_generation_request(
-        {**form, "action": "reference_transform"},
+        {**form, "action": action},
         profiles=PROFILES,
         available_models={key for key, value in MODELS.items() if value["status"] == "available"},
+        parent=parent,
     )
-    if not upload:
+    source_run_id: str | None = None
+    lineage_parent = parent
+    source_bytes: bytes
+    source_mime: str
+    if parent and (parent.get("reference_edit") or {}).get("enabled"):
+        reference = parent["reference_edit"]
+        source_name = reference.get("source_file")
+        if not isinstance(source_name, str) or Path(source_name).name != source_name:
+            raise ValueError("Parent transform source is unavailable")
+        source_path = run_dir(parent["run_id"]) / source_name
+        if not source_path.is_file():
+            raise ValueError("Parent transform source is unavailable")
+        source_bytes = source_path.read_bytes()
+        source_mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(source_path.suffix.lower(), "image/png")
+        source_run_id = reference.get("source_run_id")
+    elif upload:
+        source_bytes = upload.read()
+        source_mime = upload.mimetype or ""
+    elif form.get("source_run_id"):
+        source_run_id = safe_id(str(form["source_run_id"]))
+        source = read_receipt(source_run_id)
+        output = source.get("output") or {}
+        source_name = output.get("file")
+        if source.get("generation_state") != "succeeded" or not isinstance(source_name, str) or Path(source_name).name != source_name:
+            raise ValueError("Selected source run has no completed image")
+        source_path = run_dir(source_run_id) / source_name
+        if not source_path.is_file():
+            raise ValueError("Selected source image is unavailable")
+        source_bytes = source_path.read_bytes()
+        source_mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(source_path.suffix.lower(), "image/png")
+        lineage_parent = source
+    else:
         raise ValueError("Upload a PNG, JPEG, or WebP image")
-    ingested = storage.ingest_reference(upload.read(), upload.mimetype or "")
-    folder = safe_library_rel(form.get("library_folder") or "Inbox")
+    ingested = storage.ingest_reference(source_bytes, source_mime)
+    folder = safe_library_rel(form.get("library_folder") or (lineage_parent.get("library_folder") if lineage_parent else "Inbox"))
 
     run_id = str(uuid.uuid4())
     RUNS.mkdir(parents=True, exist_ok=True)
@@ -302,15 +347,16 @@ def create_reference_transform(form: dict[str, str], upload: Any) -> str:
                 "resolution": normalized.resolution,
             },
             "workflow": workflow,
-            "family_id": run_id,
-            "parent_run_id": None,
-            "relationship": "reference_transform",
+            "family_id": lineage_parent["family_id"] if lineage_parent else run_id,
+            "parent_run_id": lineage_parent["run_id"] if lineage_parent else None,
+            "relationship": normalized.action,
             "library_folder": folder,
             "library_copies": [],
             "archive_state": "local_only",
             "reference_edit": {
                 "enabled": True,
                 "experimental": True,
+                "source_run_id": source_run_id,
                 "preservation": "best effort; do not promise exact likeness",
                 "source_file": "reference-original" + ingested.original_suffix,
                 "inference_file": "reference.png",
@@ -684,16 +730,48 @@ def index():
     )
 
 
+def create_page_context(mode: str) -> dict[str, Any]:
+    connection = initialize_database(database_path())
+    try:
+        preferences = PreferenceRepository(connection)
+        saved_recipes = preferences.list_recipes()
+        notes = {model_id: preferences.get_model_note(model_id) for model_id in MODELS}
+        legacy_notes = load_model_notes()
+        for model_id, note in legacy_notes.items():
+            if model_id in MODELS and note and notes[model_id]["revision"] == 0:
+                notes[model_id] = preferences.save_model_note(model_id, str(note), expected_revision=0)
+    finally:
+        connection.close()
+    recipes = [
+        {**recipe, "description": "Built-in starting point", "builtin": True}
+        for recipe in BUILTIN_RECIPES if recipe["mode"] == mode
+    ]
+    recipes.extend(
+        {
+            "id": recipe["id"], "name": recipe["name"], "description": recipe["description"],
+            "builtin": False, **recipe["request"],
+        }
+        for recipe in saved_recipes if recipe["request"]["mode"] == mode
+    )
+    source_run_id = request.args.get("source_run_id", "")
+    source_run = read_receipt(source_run_id) if source_run_id else None
+    return {
+        "mode": mode,
+        "models": MODELS,
+        "profiles": PROFILES,
+        "aspects": ASPECT_DIMENSIONS,
+        "folders": list_library_folders(),
+        "model_notes": notes,
+        "recipes": recipes,
+        "active_jobs": queue_depth(database_path()),
+        "source_run_id": source_run_id,
+        "source_run": source_run,
+    }
+
+
 @app.get("/create")
 def create_view():
-    return render_template(
-        "create.html",
-        models=MODELS,
-        profiles=PROFILES,
-        folders=list_library_folders(),
-        comfy_url=COMFY_URL,
-        model_notes=load_model_notes(),
-    )
+    return render_template("create.html", **create_page_context("text"))
 
 
 @app.get("/styles")
@@ -701,18 +779,64 @@ def styles():
     return render_template("styles.html")
 
 
+@app.post("/recipes")
+def recipe_save_view():
+    try:
+        mode = request.form.get("mode", "text")
+        model_id = request.form.get("model_id", "")
+        profile = request.form.get("profile", "")
+        if model_id not in MODELS or MODELS[model_id]["status"] != "available":
+            raise ValueError("Recipe model is not available")
+        if profile not in PROFILES:
+            raise ValueError("Recipe profile is invalid")
+        name = request.form.get("name", "")
+        recipe_id = f"{slug(name)}-{uuid.uuid4().hex[:8]}"
+        connection = initialize_database(database_path())
+        try:
+            PreferenceRepository(connection).save_recipe(
+                recipe_id=recipe_id,
+                name=name,
+                description=request.form.get("description", ""),
+                request={
+                    "schema_version": 1,
+                    "mode": mode,
+                    "model_id": model_id,
+                    "prompt": request.form.get("prompt", ""),
+                    "profile": profile,
+                    "aspect": request.form.get("aspect", "square"),
+                    "collection": request.form.get("library_folder", ""),
+                },
+            )
+        finally:
+            connection.close()
+        return redirect(url_for("transform_view" if mode == "transform" else "create_view"))
+    except ValueError as exc:
+        return render_template("error.html", message=str(exc)), 400
+
+
 @app.post("/models/<model_id>/notes")
 def model_notes_view(model_id: str):
     try:
-        save_model_note(model_id, request.form.get("note", ""))
+        if model_id not in MODELS:
+            raise ValueError("Unknown model")
+        revision = int(request.form.get("revision", "0"))
+        connection = initialize_database(database_path())
+        try:
+            PreferenceRepository(connection).save_model_note(
+                model_id, request.form.get("note", ""), expected_revision=revision
+            )
+        finally:
+            connection.close()
         return redirect(url_for("create_view"))
-    except ValueError as exc:
+    except PreferenceConflict as exc:
+        return render_template("error.html", message=str(exc)), 409
+    except (ValueError, TypeError) as exc:
         return render_template("error.html", message=str(exc)), 400
 
 
 @app.get("/transform")
 def transform_view():
-    return render_template("transform.html", profiles=PROFILES, folders=list_library_folders())
+    return render_template("create.html", **create_page_context("transform"))
 
 
 @app.post("/transform")
@@ -755,7 +879,19 @@ def family_view(family_id: str):
     family = next((value for value in family_groups() if value["family_id"] == family_id), None)
     if not family:
         abort(404)
-    return render_template("family.html", family=family, folders=list_library_folders())
+    source_asset = next((item for item in family["runs"] if (item.get("reference_edit") or {}).get("enabled")), None)
+    connection = initialize_database(database_path())
+    try:
+        row = connection.execute("SELECT chosen_run_id FROM family_choices WHERE family_id = ?", (family_id,)).fetchone()
+    finally:
+        connection.close()
+    return render_template(
+        "family.html",
+        family=family,
+        folders=list_library_folders(),
+        source_asset=source_asset,
+        preferred_run_id=row[0] if row else None,
+    )
 
 
 @app.get("/healthz")
@@ -924,7 +1060,10 @@ def explore_submit(run_id: str):
         if existing is not None:
             return redirect(url_for("run_view", run_id=existing["run_id"]))
         parent = read_receipt(run_id)
-        new_run = validate_and_create(request.form, parent=parent)
+        if (parent.get("reference_edit") or {}).get("enabled") and request.form.get("action") in {"repeat", "variation", "regenerate_larger"}:
+            new_run = create_reference_transform(request.form, None, parent=parent)
+        else:
+            new_run = validate_and_create(request.form, parent=parent)
         enqueue_run(new_run, key)
         return redirect(url_for("run_view", run_id=new_run))
     except (ValueError, OSError) as exc:
@@ -994,6 +1133,23 @@ def thumbnail(run_id: str, size: int):
     response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
     response.headers["X-Image-Width"] = str(derived.width)
     response.headers["X-Image-Height"] = str(derived.height)
+    return response
+
+
+@app.get("/media/<run_id>/reference")
+def reference_media(run_id: str):
+    run = read_receipt(run_id)
+    reference = run.get("reference_edit") or {}
+    filename = reference.get("source_file")
+    digest = reference.get("original_sha256")
+    if not reference.get("enabled") or not isinstance(filename, str) or Path(filename).name != filename or not isinstance(digest, str):
+        abort(404)
+    path = run_dir(run_id) / filename
+    if not path.is_file():
+        abort(404)
+    response = send_file(path, conditional=True)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-SHA256"] = digest
     return response
 
 

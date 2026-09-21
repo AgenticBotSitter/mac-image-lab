@@ -7,6 +7,18 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T17 — Source lineage and explicit iteration modes: completed locally
+
+Implemented and verified source-aware transforms from completed Library images, new-family external uploads, immutable parent lineage, exact private source preservation, and source-conditioned repeat/variation/larger workflows. Family pages now expose the exact transform source and preferred-version state without loading result originals in the grid.
+
+Verification: lineage suite `3 passed`; combined T16/T17 focused suite `9 passed`; full suite `125 passed in 16.91s`.
+
+### T16 — Unified Create, Transform, and recipes: completed locally
+
+Implemented one responsive Text/Transform workspace with model-driven guidance, independent quality/aspect controls, explicit custom overrides, measured queue estimates, safe upload preview/removal/drag-drop, protected edited prompts, one-submit guarding, versioned named recipes, and optimistic model-note revisions.
+
+Verification: recipe repository `3 passed`; Create browser acceptance `3 passed`; real desktop/phone Create and Transform screenshots were captured and inspected under `validation/t16/`.
+
 ### T15 — Fullscreen viewer and run detail: completed locally
 
 Commit: `3c24a66866137d48d6b05731cd2a67efac973c33`
@@ -327,7 +339,7 @@ R2 status:
 
 ## Next task
 
-T16 — unify Create and Transform controls, visual recipes, protected prompt edits, queue estimates, and named recipe persistence.
+T18 — build the two-version compare chooser, side-by-side/slider modes, synchronized zoom, settings diff, aspect warning, and preferred-version action.
 
 ## Constraints carried forward
 

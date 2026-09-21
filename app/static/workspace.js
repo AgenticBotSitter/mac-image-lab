@@ -1,11 +1,119 @@
 (() => {
   const recipe = document.getElementById("recipe");
   const prompt = document.getElementById("prompt");
-  if (recipe && prompt) {
-    recipe.addEventListener("change", () => {
-      if (recipe.value) prompt.value = recipe.value;
+  const applyRecipe = document.getElementById("apply-recipe");
+  const recipeStatus = document.getElementById("recipe-status");
+  const generationForm = document.getElementById("generation-form");
+  const profile = document.getElementById("profile");
+  const aspect = document.getElementById("aspect");
+  const model = document.getElementById("model-id");
+  const collection = document.getElementById("library-folder");
+  const widthInput = generationForm?.querySelector("input[name='width']");
+  const heightInput = generationForm?.querySelector("input[name='height']");
+  const estimate = document.getElementById("queue-estimate");
+  const overrideIndicator = document.getElementById("override-indicator");
+  let promptDirty = false;
+  let pendingRecipe = "";
+
+  const updateDimensions = () => {
+    if (!profile || !aspect || !widthInput || !heightInput || aspect.value === "custom") return;
+    const option = profile.selectedOptions[0];
+    const shape = aspect.value;
+    widthInput.value = option.dataset[`${shape}Width`] || "";
+    heightInput.value = option.dataset[`${shape}Height`] || "";
+    if (overrideIndicator) overrideIndicator.textContent = "";
+  };
+  const updateEstimate = () => {
+    if (!estimate || !profile) return;
+    const active = Number(estimate.dataset.activeJobs || 0);
+    estimate.textContent = `Estimated ${profile.selectedOptions[0].dataset.expected}. ${active ? `${active} active job${active === 1 ? "" : "s"} ahead or running.` : "Queue is currently clear."}`;
+  };
+  const applySelectedRecipe = () => {
+    const option = recipe?.selectedOptions[0];
+    if (!option || !prompt) return;
+    prompt.value = option.dataset.prompt || "";
+    if (profile && option.dataset.profile) profile.value = option.dataset.profile;
+    if (aspect && option.dataset.aspect) aspect.value = option.dataset.aspect;
+    if (model && option.dataset.model && [...model.options].some(item => item.value === option.dataset.model)) model.value = option.dataset.model;
+    if (collection && option.dataset.collection && [...collection.options].some(item => item.value === option.dataset.collection)) collection.value = option.dataset.collection;
+    promptDirty = false;
+    pendingRecipe = "";
+    updateDimensions(); updateEstimate();
+    model?.dispatchEvent(new Event("change"));
+    recipeStatus.textContent = "Recipe applied. Review the controls, then submit explicitly.";
+  };
+  if (prompt) prompt.addEventListener("input", () => { promptDirty = true; pendingRecipe = ""; });
+  if (recipe && applyRecipe) {
+    recipe.addEventListener("change", () => { pendingRecipe = ""; });
+    applyRecipe.addEventListener("click", () => {
+      if (promptDirty && pendingRecipe !== recipe.value) {
+        pendingRecipe = recipe.value;
+        recipeStatus.textContent = "This will replace your edited prompt. Press Use recipe again to confirm.";
+        return;
+      }
+      applySelectedRecipe();
     });
   }
+  profile?.addEventListener("change", () => { updateDimensions(); updateEstimate(); });
+  aspect?.addEventListener("change", updateDimensions);
+  [widthInput, heightInput].forEach(input => input?.addEventListener("input", () => {
+    if (aspect) aspect.value = "custom";
+    if (overrideIndicator) overrideIndicator.textContent = "· custom size";
+  }));
+  model?.addEventListener("change", () => {
+    document.querySelectorAll("[data-model-guide]").forEach(guide => { guide.hidden = guide.dataset.modelGuide !== model.value; });
+  });
+  updateDimensions(); updateEstimate();
+
+  const upload = document.getElementById("reference");
+  const uploadPreview = document.getElementById("upload-preview");
+  const uploadImage = uploadPreview?.querySelector("img");
+  const uploadMetadata = document.getElementById("upload-metadata");
+  const removeUpload = document.getElementById("remove-upload");
+  const dropzone = document.getElementById("upload-dropzone");
+  let previewUrl = "";
+  const showUpload = () => {
+    const file = upload?.files?.[0];
+    if (!file || !uploadImage || !uploadPreview) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(file);
+    uploadImage.onload = () => {
+      uploadMetadata.textContent = `${uploadImage.naturalWidth}×${uploadImage.naturalHeight} · ${(file.size / 1024 / 1024).toFixed(2)} MiB · ${file.type || "unknown type"}`;
+    };
+    uploadImage.src = previewUrl;
+    uploadPreview.hidden = false;
+  };
+  upload?.addEventListener("change", showUpload);
+  removeUpload?.addEventListener("click", () => {
+    upload.value = "";
+    uploadPreview.hidden = true;
+    uploadImage.removeAttribute("src");
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = "";
+    upload.focus();
+  });
+  if (dropzone && upload) {
+    ["dragenter", "dragover"].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.add("dragging"); }));
+    ["dragleave", "drop"].forEach(type => dropzone.addEventListener(type, event => { event.preventDefault(); dropzone.classList.remove("dragging"); }));
+    dropzone.addEventListener("drop", event => {
+      if (!event.dataTransfer?.files?.length) return;
+      upload.files = event.dataTransfer.files;
+      showUpload();
+    });
+  }
+
+  generationForm?.addEventListener("submit", () => {
+    const submit = document.getElementById("generation-submit");
+    if (submit) { submit.disabled = true; submit.textContent = "Submitting one job…"; }
+  });
+  const saveRecipeForm = document.getElementById("save-recipe-form");
+  saveRecipeForm?.addEventListener("submit", () => {
+    for (const name of ["model_id", "prompt", "profile", "aspect", "library_folder"]) {
+      const source = generationForm.elements.namedItem(name);
+      const destination = saveRecipeForm.elements.namedItem(name);
+      if (source && destination) destination.value = source.value;
+    }
+  });
 
   const grid = document.getElementById("image-grid");
   const densityButtons = [...document.querySelectorAll("[data-density]")];
