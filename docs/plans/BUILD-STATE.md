@@ -7,7 +7,21 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
-### T14 — Responsive visual shell and Library: implementation complete; visual checkpoint awaiting Alastair
+### T15 — Fullscreen viewer and run detail: completed locally
+
+Implemented:
+- Full-resolution image loading is deferred until the user opens the modal viewer; the detail page uses a private 960-pixel derivative.
+- Added zoom, reset, pointer drag, wheel/pinch controls, family navigation with arrow keys, Escape close, native modal focus containment, and focus restoration.
+- Added a responsive metadata drawer, clear actual-size and archive labels, explicit device download versus host-Mac library actions, and collapsed host-only/technical controls.
+- Changed family thumbnails to private derivatives and show evidence download links only when the exact files exist.
+- Added human-readable states for queued, submitting, running, succeeded, failed, cancelled, and recovery-required runs.
+
+Verification:
+- RED: the first viewer browser run failed because no deferred preview/viewer surface existed.
+- GREEN: `tests/browser/test_viewer.py` passed `4 passed`; route/regression focus passed `11 passed`; full suite passed `116 passed in 12.24s`; Python compilation and `git diff --check` passed.
+- Real-state desktop/phone detail and fullscreen screenshots were captured and visually inspected under `validation/t15/`; no horizontal overflow or viewer clipping was observed.
+
+### T14 — Responsive visual shell and Library: completed; visual direction approved by Alastair
 
 Commit: `f9ac4d9c3849539189367bcc0502b025d5e52939`
 
@@ -307,7 +321,7 @@ R2 status:
 
 ## Next task
 
-Required human checkpoint — Alastair reviews the Library/Create desktop and phone screenshots. After the visual direction is accepted, continue with T15 fullscreen viewer and run detail.
+T16 — unify Create and Transform controls, visual recipes, protected prompt edits, queue estimates, and named recipe persistence.
 
 ## Constraints carried forward
 

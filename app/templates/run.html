@@ -2,16 +2,121 @@
 {% block title %}{{ run.title }} · Mac Image Lab{% endblock %}
 {% block head %}{% if run.generation_state in ['queued','submitting','running'] %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
 {% block content %}
-<header class="page-head"><div><p class="eyebrow">{{ run.model_label }} · {{ run.model_source }}</p><h1>{{ run.title }}</h1><p>{{ run.generation_state }} · Family <a href="{{ url_for('family_view', family_id=run.family_id) }}">{{ run.family_id[:8] }}</a></p></div></header>
+<header class="page-head detail-head">
+  <div>
+    <p class="eyebrow">{{ run.model_label }} · {{ run.model_source }}</p>
+    <h1>{{ run.title }}</h1>
+    <p>{{ state_label }} · Family <a href="{{ url_for('family_view', family_id=run.family_id) }}">{{ run.family_id[:8] }}</a></p>
+  </div>
+  <a class="button secondary" href="{{ url_for('index') }}">Back to Library</a>
+</header>
 {% if run.output %}
 <section class="detail-layout">
-  <div><img class="output" src="{{ url_for('download', run_id=run_id, name='output.png') }}" alt="{{ run.title }}"><div class="action-row"><a class="button" href="{{ url_for('explore_view', run_id=run_id) }}">New variation</a><a class="button secondary" href="{{ url_for('explore_view', run_id=run_id, mode='larger') }}">Generate larger</a><a class="button secondary" href="{{ url_for('transform_view') }}">Transform</a><a class="button secondary" href="{{ url_for('download', run_id=run_id, name='output.png') }}">Download PNG</a></div></div>
-  <aside class="card"><p class="eyebrow">PROMPT</p><p class="full-prompt">{{ run.prompt }}</p><dl><dt>Model</dt><dd>{{ run.model_label }}</dd><dt>Actual output</dt><dd>{{ run.output.width }}×{{ run.output.height }}</dd><dt>Requested settings</dt><dd>{{ run.parameters.width }}×{{ run.parameters.height }} · {{ run.parameters.steps }} steps · seed {{ run.parameters.seed }}</dd><dt>Runtime</dt><dd>{{ run.elapsed_seconds or 'not recorded' }} seconds</dd><dt>Collection</dt><dd>{{ run.library_folder or 'Not filed yet' }}</dd></dl></aside>
+  <div class="detail-artwork">
+    <button
+      id="viewer-open"
+      class="image-open"
+      type="button"
+      aria-label="Open fullscreen viewer"
+      data-original-src="{{ url_for('original_media', run_id=run_id) }}"
+      data-previous-url="{{ url_for('run_view', run_id=previous_run_id) if previous_run_id else '' }}"
+      data-next-url="{{ url_for('run_view', run_id=next_run_id) if next_run_id else '' }}">
+      <img id="detail-preview" class="output" src="{{ url_for('thumbnail', run_id=run_id, size=960) }}" alt="{{ run.title }}">
+      <span class="image-open-hint">View full size</span>
+    </button>
+    <div class="action-row" aria-label="Image actions">
+      <a class="button" href="{{ url_for('transform_view', source_run_id=run_id) }}">Transform</a>
+      <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id, mode='repeat') }}">Repeat exactly</a>
+      <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id) }}">New variation</a>
+      <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id, mode='larger') }}">Generate larger</a>
+      <a class="button secondary" href="{{ url_for('compare_view', left=run_id) }}">Compare</a>
+      <a class="button secondary" href="{{ url_for('download', run_id=run_id, name='output.png') }}">Download to this device</a>
+    </div>
+    <p class="sub action-note">Repeat uses the same recorded request, but Apple MPS does not guarantee a bit-identical result.</p>
+  </div>
+  <aside class="card metadata-card">
+    <p class="eyebrow">IMAGE DETAILS</p>
+    <h2>{{ run.output.width }}×{{ run.output.height }} pixels</h2>
+    <p class="archive-label {% if run.archive_state == 'verified' %}good{% endif %}">
+      {% if run.archive_state == 'verified' %}Archive verified in R2{% elif run.archive_state == 'failed' %}R2 archive needs attention{% elif run.archive_state == 'archiving' %}R2 archive in progress{% else %}Stored on this Mac only{% endif %}
+    </p>
+    <h3>Prompt</h3>
+    <p class="full-prompt prompt-scroll">{{ run.prompt }}</p>
+    <dl>
+      <dt>Model</dt><dd>{{ run.model_label }}</dd>
+      <dt>Actual output</dt><dd>{{ run.output.width }}×{{ run.output.height }}</dd>
+      <dt>Requested</dt><dd>{{ run.parameters.width }}×{{ run.parameters.height }} · {{ run.parameters.steps }} steps · seed {{ run.parameters.seed }}</dd>
+      <dt>Runtime</dt><dd>{{ run.elapsed_seconds or 'Not recorded' }}{% if run.elapsed_seconds %} seconds{% endif %}</dd>
+      <dt>Collection</dt><dd>{{ run.library_folder or 'Not filed yet' }}</dd>
+    </dl>
+  </aside>
 </section>
-<section class="card"><h2>File and organize</h2><form class="inline-form" method="post" action="{{ url_for('file_view', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><select name="library_folder">{% for folder in folders %}<option value="{{ folder }}" {% if folder==run.library_folder %}selected{% endif %}>{{ folder }}</option>{% endfor %}</select><button type="submit">Copy to collection</button></form><form class="inline-form" method="post" action="{{ url_for('reveal_in_finder', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="secondary" type="submit">Open on host Mac</button></form></section>
+<section class="card organize-card">
+  <h2>Save in Mac library</h2>
+  <p class="sub">Copies this image into a Finder-visible collection on the host Mac. This is separate from downloading it to the device you are using.</p>
+  <form class="inline-form" method="post" action="{{ url_for('file_view', run_id=run_id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <label>Collection<select name="library_folder">{% for folder in folders %}<option value="{{ folder }}" {% if folder==run.library_folder %}selected{% endif %}>{{ folder }}</option>{% endfor %}</select></label>
+    <button type="submit">Save in Mac library</button>
+  </form>
+  <details class="host-actions">
+    <summary>Host Mac actions</summary>
+    <p class="sub">Only useful when you are physically using the Mac that runs Image Lab.</p>
+    <form method="post" action="{{ url_for('reveal_in_finder', run_id=run_id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="secondary" type="submit">Open on host Mac</button>
+    </form>
+  </details>
+</section>
+<dialog id="image-viewer" class="viewer" aria-labelledby="viewer-title">
+  <div class="viewer-shell">
+    <header class="viewer-toolbar">
+      <div><p class="eyebrow">FULL RESOLUTION</p><h2 id="viewer-title">{{ run.title }}</h2></div>
+      <div class="viewer-tools" aria-label="Viewer controls">
+        <button type="button" class="secondary" id="viewer-zoom-out" aria-label="Zoom out">−</button>
+        <button type="button" class="secondary" id="viewer-reset" aria-label="Reset zoom">100%</button>
+        <button type="button" class="secondary" id="viewer-zoom-in" aria-label="Zoom in">+</button>
+        <button type="button" class="secondary" id="viewer-details" aria-label="Show image details" aria-expanded="false">Details</button>
+        <button type="button" id="viewer-close" aria-label="Close fullscreen viewer">Close</button>
+      </div>
+    </header>
+    <div class="viewer-body">
+      <div id="viewer-stage" class="viewer-stage" data-scale="1" tabindex="0" aria-label="Zoomable image. Drag to pan when zoomed.">
+        <img id="viewer-image" data-src="{{ url_for('original_media', run_id=run_id) }}" alt="{{ run.title }} at full resolution" draggable="false">
+      </div>
+      <aside id="viewer-metadata" class="viewer-metadata" aria-hidden="true" hidden>
+        <h2>Image details</h2>
+        <dl><dt>Size</dt><dd>{{ run.output.width }}×{{ run.output.height }}</dd><dt>Model</dt><dd>{{ run.model_label }}</dd><dt>Seed</dt><dd>{{ run.parameters.seed }}</dd><dt>Archive</dt><dd>{{ run.archive_state }}</dd></dl>
+        <h3>Full prompt</h3><p class="full-prompt prompt-scroll">{{ run.prompt }}</p>
+      </aside>
+    </div>
+    <footer class="viewer-footer"><span>Arrow keys move through this family · Escape closes</span><span>Scroll or pinch to zoom · drag to pan</span></footer>
+  </div>
+</dialog>
 {% else %}
-<section class="card"><h2>{{ run.generation_state|replace('_',' ')|title }}</h2><p>This run has no completed output yet. Queue status updates remain separate from archival.</p>{% if run.error %}<p class="error">{{ run.error }}</p>{% endif %}</section>
+<section class="card state-card">
+  <h2>{{ state_label }}</h2>
+  <p>This run has no completed image. Queue and archive state remain separate.</p>
+  {% if run.error %}<p class="error">{{ run.error }}</p>{% endif %}
+  <a class="button secondary" href="{{ url_for('queue_view') }}">Open Queue</a>
+</section>
 {% endif %}
-<section class="card"><h2>Technical record</h2><dl><dt>Created</dt><dd>{{ run.created_at }}</dd><dt>Backend prompt</dt><dd>{{ run.comfy_prompt_id or 'not accepted yet' }}</dd><dt>Archive</dt><dd>{{ run.archive_state }}</dd>{% if run.output %}<dt>SHA-256</dt><dd><code>{{ run.output.sha256 }}</code></dd>{% endif %}</dl><p><a href="{{ url_for('download', run_id=run_id, name='receipt.json') }}">Receipt</a> · <a href="{{ url_for('download', run_id=run_id, name='workflow.json') }}">Workflow</a></p>{% if run.generation_state == 'succeeded' and run.archive_state in ['local_only','failed'] %}<form method="post" action="{{ url_for('archive_view', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit">Archive to R2 and verify</button></form>{% endif %}</section>
-{% if siblings %}<section><h2>Image family</h2><div class="image-grid compact">{% for sibling in siblings %}<a class="image-tile" href="{{ url_for('run_view', run_id=sibling.run_id) }}">{% if sibling.output %}<img src="{{ url_for('download', run_id=sibling.run_id, name='output.png') }}" alt="{{ sibling.title }}" loading="lazy">{% endif %}<span class="tile-meta"><b>{{ sibling.title }}</b></span></a>{% endfor %}</div></section>{% endif %}
+<details class="card technical-record">
+  <summary>Technical record</summary>
+  <dl>
+    <dt>Created</dt><dd>{{ run.created_at }}</dd>
+    <dt>Backend prompt</dt><dd>{{ run.comfy_prompt_id or 'Not accepted yet' }}</dd>
+    <dt>Archive</dt><dd>{{ run.archive_state }}</dd>
+    {% if run.output and run.output.sha256 %}<dt>SHA-256</dt><dd><code>{{ run.output.sha256 }}</code></dd>{% endif %}
+  </dl>
+  <p class="evidence-links">
+    {% if evidence_files['receipt.json'] %}<a href="{{ url_for('download', run_id=run_id, name='receipt.json') }}">Receipt</a>{% endif %}
+    {% if evidence_files['workflow.json'] %}<a href="{{ url_for('download', run_id=run_id, name='workflow.json') }}">Workflow</a>{% endif %}
+    {% if evidence_files['comfy-history.json'] %}<a href="{{ url_for('download', run_id=run_id, name='comfy-history.json') }}">Backend history</a>{% endif %}
+    {% if evidence_files['archive.json'] %}<a href="{{ url_for('download', run_id=run_id, name='archive.json') }}">Archive record</a>{% endif %}
+  </p>
+  {% if run.generation_state == 'succeeded' and run.archive_state in ['local_only','failed'] %}<form method="post" action="{{ url_for('archive_view', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit">Archive to R2 and verify</button></form>{% endif %}
+</details>
+{% if siblings %}<section class="family-strip"><h2>Image family</h2><div class="image-grid compact">{% for sibling in siblings %}<a class="image-tile" href="{{ url_for('run_view', run_id=sibling.run_id) }}">{% if sibling.output %}<img src="{{ url_for('thumbnail', run_id=sibling.run_id, size=320) }}" alt="{{ sibling.title }}" loading="lazy">{% endif %}<span class="tile-meta"><b>{{ sibling.title }}</b></span></a>{% endfor %}</div></section>{% endif %}
 {% endblock %}
+{% block scripts %}{% if run.output %}<script src="{{ url_for('static', filename='viewer.js') }}" defer></script>{% endif %}{% endblock %}

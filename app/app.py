@@ -877,8 +877,38 @@ def retry_job(job_id: str):
 @app.get("/runs/<run_id>")
 def run_view(run_id: str):
     run = read_receipt(run_id)
-    siblings = [r for r in next((f["runs"] for f in family_groups() if f["family_id"] == run["family_id"]), []) if r["run_id"] != run_id]
-    return render_template("run.html", run=run, run_id=run_id, profiles=PROFILES, models=MODELS, folders=list_library_folders(), siblings=siblings)
+    family_runs = next((f["runs"] for f in family_groups() if f["family_id"] == run["family_id"]), [])
+    siblings = [item for item in family_runs if item["run_id"] != run_id]
+    ordered_ids = [item["run_id"] for item in family_runs]
+    current_index = ordered_ids.index(run_id) if run_id in ordered_ids else 0
+    previous_run_id = ordered_ids[current_index - 1] if current_index > 0 else None
+    next_run_id = ordered_ids[current_index + 1] if current_index + 1 < len(ordered_ids) else None
+    evidence_files = {
+        name: (run_dir(run_id) / name).is_file()
+        for name in ("receipt.json", "workflow.json", "comfy-history.json", "archive.json")
+    }
+    state_labels = {
+        "queued": "Waiting in generation queue",
+        "submitting": "Submitting to local generator",
+        "running": "Generation in progress",
+        "succeeded": "Generation complete",
+        "failed": "Generation failed",
+        "cancelled": "Generation cancelled",
+        "needs_attention": "Recovery review required",
+    }
+    return render_template(
+        "run.html",
+        run=run,
+        run_id=run_id,
+        profiles=PROFILES,
+        models=MODELS,
+        folders=list_library_folders(),
+        siblings=siblings,
+        previous_run_id=previous_run_id,
+        next_run_id=next_run_id,
+        evidence_files=evidence_files,
+        state_label=state_labels.get(run.get("generation_state"), "Generation status unavailable"),
+    )
 
 
 @app.get("/runs/<run_id>/explore")
@@ -964,6 +994,24 @@ def thumbnail(run_id: str, size: int):
     response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
     response.headers["X-Image-Width"] = str(derived.width)
     response.headers["X-Image-Height"] = str(derived.height)
+    return response
+
+
+@app.get("/media/<run_id>/original")
+def original_media(run_id: str):
+    run = read_receipt(run_id)
+    output = run.get("output") or {}
+    filename = output.get("file")
+    digest = output.get("sha256")
+    if not isinstance(filename, str) or Path(filename).name != filename or not isinstance(digest, str):
+        abort(404)
+    path = run_dir(run_id) / filename
+    if not path.is_file():
+        abort(404)
+    response = send_file(path, conditional=True)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Content-Disposition"] = f'inline; filename="{Path(filename).name}"'
+    response.headers["X-Content-SHA256"] = digest
     return response
 
 
