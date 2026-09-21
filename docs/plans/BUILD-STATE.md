@@ -9,6 +9,8 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ### T12 — Shared shell and route compatibility: completed locally
 
+Commit: `318b5e0faea66fd81fd5b1a02993233dfb8ced89`
+
 Implemented:
 - Added a common `base.html` shell with consistent Library, Create, Compare, Queue, and Settings navigation and local external JavaScript.
 - `/` is now the image-first Library; `/create` owns text generation; `/gallery` redirects safely to Library. Transform, Queue, Settings, Guides, run, family, and Explore routes remain compatible.
@@ -21,6 +23,11 @@ TDD evidence:
 - RED: six route tests initially produced five expected failures for the missing Library/Create split, compatibility redirect, shared navigation, safe redirect, and actual-output dimensions.
 - GREEN: route suite `6 passed`; route/regression/security suite `17 passed`; full suite `100 passed in 0.51s`; compilation and diff checks passed with zero expected failures.
 - Route definitions still use the compatibility module while service extraction continues; no live listener or service was restarted.
+
+R2 milestone artifact:
+- Local: `backups/milestones/t12-2026-09-21T183833Z/mac-image-lab-t12.bundle`
+- Verified key: `hermes-data/Marvin/Mac Image Lab/builds/t12/2026-09-21/mac-image-lab-t12.bundle`
+- SHA-256: `fa693bd1fbc22840e3770256281ab10c70b729acbdd79826c0fc2bcc2815b06e`; `head_object` length and metadata matched.
 
 ### T11 — App factory and request protection: completed locally
 
