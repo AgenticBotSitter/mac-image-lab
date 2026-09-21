@@ -35,6 +35,7 @@ from imagelab.repositories.jobs import JobRepository
 from imagelab.repositories.runs import RunRepository
 from imagelab.services.archive import archive_evidence
 from imagelab.services.generation import enqueue_generation, queue_depth
+from imagelab.services.recovery import BackendDisconnected, BackendSnapshot, SubmissionUncertain
 from imagelab.validation import GenerationRequest, normalize_generation_request
 
 RUNS = ROOT / "runs"
@@ -388,6 +389,119 @@ def execute_run(run_id: str) -> None:
     r.update(status="local_only", generation_state="succeeded", completed_at=now(), elapsed_seconds=round(time.monotonic() - start, 3))
     write_receipt(run_id, r)
     file_run_output(run_id, r.get("library_folder") or "Inbox")
+
+
+def _json_contains(value: Any, needle: str) -> bool:
+    if isinstance(value, str):
+        return value == needle
+    if isinstance(value, dict):
+        return any(_json_contains(item, needle) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_json_contains(item, needle) for item in value)
+    return False
+
+
+def _first_output_image(record: dict[str, Any]) -> dict[str, Any] | None:
+    for output in (record.get("outputs") or {}).values():
+        images = output.get("images") if isinstance(output, dict) else None
+        if isinstance(images, list) and images and isinstance(images[0], dict):
+            return images[0]
+    return None
+
+
+class ComfyRecoveryBackend:
+    """ComfyUI gateway with correlation-aware restart recovery."""
+
+    def find_by_correlation(self, token: str) -> str | None:
+        matches: set[str] = set()
+        try:
+            history = http_json("/history")
+            for prompt_id, record in history.items():
+                if _json_contains(record, token):
+                    matches.add(str(prompt_id))
+            queue_state = http_json("/queue")
+            for group in ("queue_running", "queue_pending"):
+                for item in queue_state.get(group, []):
+                    if _json_contains(item, token) and isinstance(item, list) and item:
+                        matches.add(str(item[1] if len(item) > 1 else item[0]))
+        except (URLError, TimeoutError, OSError) as exc:
+            raise BackendDisconnected(str(exc)) from exc
+        if len(matches) > 1:
+            raise SubmissionUncertain("multiple backend jobs match the durable correlation token")
+        return next(iter(matches), None)
+
+    def submit(self, run_id: str, token: str) -> str:
+        receipt = read_receipt(run_id)
+        payload = {"prompt": receipt["workflow"], "client_id": token}
+        try:
+            result = http_json("/prompt", "POST", payload)
+        except (URLError, TimeoutError, OSError) as exc:
+            raise SubmissionUncertain(f"backend submission result is uncertain: {exc}") from exc
+        prompt_id = result.get("prompt_id")
+        if not isinstance(prompt_id, str) or not prompt_id:
+            raise SubmissionUncertain("backend accepted request without a prompt identifier")
+        storage.atomic_write_beneath(
+            run_dir(run_id), "comfy-submit.json", (json.dumps(result, indent=2) + "\n").encode()
+        )
+        receipt["comfy_prompt_id"] = prompt_id
+        receipt.update(status="running", generation_state="running", started_at=receipt.get("started_at") or now())
+        write_receipt(run_id, receipt)
+        return prompt_id
+
+    def inspect(self, backend_job_id: str) -> BackendSnapshot:
+        try:
+            history = http_json(f"/history/{backend_job_id}")
+            record = history.get(backend_job_id)
+            if record:
+                state = record.get("status", {}).get("status_str")
+                if state == "success":
+                    return BackendSnapshot("succeeded", payload={"record": record})
+                if state == "error":
+                    return BackendSnapshot("failed", detail=json.dumps(record.get("status") or {}), payload={"record": record})
+            queue_state = http_json("/queue")
+        except (URLError, TimeoutError, OSError) as exc:
+            raise BackendDisconnected(str(exc)) from exc
+        for item in queue_state.get("queue_running", []):
+            if _json_contains(item, backend_job_id):
+                return BackendSnapshot("running")
+        for item in queue_state.get("queue_pending", []):
+            if _json_contains(item, backend_job_id):
+                return BackendSnapshot("queued")
+        return BackendSnapshot("unknown")
+
+    def collect(self, run_id: str, backend_job_id: str, snapshot: BackendSnapshot) -> bool:
+        record = snapshot.payload.get("record")
+        if not isinstance(record, dict):
+            return False
+        image_info = _first_output_image(record)
+        if image_info is None or not isinstance(image_info.get("filename"), str):
+            return False
+        source = COMFY_ROOT / "output" / image_info["filename"]
+        if not source.exists():
+            return False
+        destination = run_dir(run_id) / "output.png"
+        shutil.copy2(source, destination)
+        receipt = read_receipt(run_id)
+        with Image.open(destination) as image:
+            receipt["output"] = {
+                "file": "output.png",
+                "width": image.width,
+                "height": image.height,
+                "mode": image.mode,
+                "sha256": sha256(destination),
+                "bytes": destination.stat().st_size,
+            }
+        storage.atomic_write_beneath(
+            run_dir(run_id), "comfy-history.json", (json.dumps(record, indent=2) + "\n").encode()
+        )
+        receipt.update(status="local_only", generation_state="succeeded", completed_at=now())
+        write_receipt(run_id, receipt)
+        file_run_output(run_id, receipt.get("library_folder") or "Inbox")
+        return True
+
+
+def recovery_backend() -> ComfyRecoveryBackend:
+    return ComfyRecoveryBackend()
 
 
 def enqueue_run(run_id: str, idempotency_key: str) -> dict[str, Any]:

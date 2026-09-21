@@ -25,6 +25,32 @@ def test_reference_edit_workflow_has_validated_conditioning_shape():
     assert workflow["6"]["inputs"]["latent_image"] == ["5", 2]
 
 
+def test_comfy_recovery_finds_existing_submission_by_correlation(monkeypatch):
+    responses = {
+        "/history": {"prompt-history": {"prompt": {"extra_data": {"client_id": "token"}}}},
+        "/queue": {"queue_running": [], "queue_pending": []},
+    }
+    monkeypatch.setattr(lab, "http_json", lambda path, *args, **kwargs: responses[path])
+
+    assert lab.ComfyRecoveryBackend().find_by_correlation("token") == "prompt-history"
+
+
+def test_comfy_recovery_reports_running_queue_job(monkeypatch):
+    responses = {
+        "/history/prompt-queue": {},
+        "/queue": {"queue_running": [[1, "prompt-queue", {}, {}]], "queue_pending": []},
+    }
+    monkeypatch.setattr(lab, "http_json", lambda path, *args, **kwargs: responses[path])
+
+    assert lab.ComfyRecoveryBackend().inspect("prompt-queue").state == "running"
+
+
+def test_comfy_recovery_extracts_output_without_fixed_node_id():
+    record = {"outputs": {"42": {"images": [{"filename": "result.png"}]}}}
+
+    assert lab._first_output_image(record)["filename"] == "result.png"
+
+
 def test_only_verified_model_is_available():
     assert lab.model_for("qwen-image-2.1-local")["source"] == "Local"
     with pytest.raises(ValueError):

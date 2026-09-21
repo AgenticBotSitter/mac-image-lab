@@ -7,7 +7,26 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T09 — Interruption reconciliation and long-job safety: completed locally
+
+Implemented:
+- Durable submission intent is recorded before contacting ComfyUI; correlation tokens are reused to find accepted work after a crash.
+- Worker startup resumes `submitting` or `running` jobs before claiming new work. A `needs_attention` job blocks the heavyweight queue.
+- ComfyUI recovery searches history and queue by correlation token, persists prompt IDs immediately, and inspects backend state without a fixed wall-clock failure deadline.
+- Backend disconnects preserve ownership and emit local diagnostic events. Ambiguous submission, multiple matches, vanished history, missing output, or an unowned running record becomes `needs_attention` rather than triggering a duplicate.
+- Completed backend work can be collected after worker restart. Output discovery no longer assumes a fixed ComfyUI output-node ID.
+- Generation state in SQLite follows backend acceptance, success, failure, and recovery-required transitions; archival state remains independent.
+- Stale heartbeats are queryable for diagnostics but do not automatically fail or resubmit long-running work.
+
+TDD evidence:
+- RED: recovery tests initially failed because `imagelab.services.recovery` did not exist; the first active-job claim implementation allowed a second heavyweight claim; ambiguous correlation exceptions escaped instead of blocking safely; stale-heartbeat inspection was absent.
+- GREEN: focused recovery/job/app suite `29 passed`; full suite `81 passed, 1 xfailed in 0.48s`; compile and diff checks passed.
+- Tests cover each submission boundary, restart without resubmission, completion before reconnect, disconnect/recovery, uncertain acceptance, unknown history, missing output, stale heartbeat, and dynamic output-node discovery.
+- No live worker restart or production service cutover was performed; service-level recovery is deferred to the approved T20/T23 exercises.
+
 ### T08 — Persistent generation jobs and standalone worker: completed locally
+
+Commit: `a47f26a6118dc38e71c866e3f944dd430f8b6dab`
 
 Implemented:
 - Durable SQLite generation jobs and ordered job events with unique idempotency keys and one generation job per run.
@@ -175,7 +194,7 @@ R2 status:
 
 ## Next task
 
-T09 — Reconcile interrupted and long-running backend work without duplicate submission: persist submission boundaries, correlate ComfyUI queue/history, recover completed work, and mark ambiguous ownership `needs_attention`.
+T10 — Queue controls and telemetry: compact job APIs, progress and reconnect states, safe queued cancellation, ownership-checked running cancellation, and explicit retry as a linked new attempt.
 
 ## Constraints carried forward
 

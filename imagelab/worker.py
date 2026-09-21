@@ -11,6 +11,7 @@ from typing import BinaryIO
 
 from imagelab.db import initialize_database
 from imagelab.repositories.jobs import JobRepository
+from imagelab.services.recovery import RecoverableBackend, RecoveryCoordinator
 
 
 class WorkerAlreadyRunning(RuntimeError):
@@ -49,18 +50,35 @@ class WorkerLeadership:
 
 
 class PersistentWorker:
-    def __init__(self, database_path: Path, *, execute_generation: Callable[[str], None]):
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        execute_generation: Callable[[str], None] | None = None,
+        backend: RecoverableBackend | None = None,
+    ):
+        if (execute_generation is None) == (backend is None):
+            raise ValueError("configure exactly one generation executor or recoverable backend")
         self.database_path = Path(database_path)
         self.execute_generation = execute_generation
+        self.backend = backend
 
     def run_once(self) -> bool:
         connection = initialize_database(self.database_path)
         try:
             repository = JobRepository(connection)
-            job = repository.claim_next()
+            job = repository.active()
+            if job is not None and job["state"] == "needs_attention":
+                return False
+            if job is None:
+                job = repository.claim_next()
             if job is None:
                 return False
+            if self.backend is not None:
+                RecoveryCoordinator(repository, self.backend).step(job)
+                return True
             try:
+                assert self.execute_generation is not None
                 self.execute_generation(job["run_id"])
             except Exception as exc:
                 repository.fail(job["id"], exc)
@@ -72,8 +90,8 @@ class PersistentWorker:
 
     def run_forever(self, *, poll_seconds: float = 1.0) -> None:
         while True:
-            if not self.run_once():
-                time.sleep(poll_seconds)
+            self.run_once()
+            time.sleep(poll_seconds)
 
 
 def main() -> int:
@@ -84,9 +102,9 @@ def main() -> int:
     args = parser.parse_args()
 
     # Imported only by the worker entry point; the web module never starts a worker.
-    from app.app import execute_run
+    from app.app import recovery_backend
 
-    worker = PersistentWorker(args.database, execute_generation=execute_run)
+    worker = PersistentWorker(args.database, backend=recovery_backend())
     try:
         with WorkerLeadership(args.lock):
             if args.once:

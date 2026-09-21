@@ -112,7 +112,7 @@ class JobRepository:
             timestamp = utc_now()
             cursor = self.connection.execute(
                 """UPDATE jobs
-                   SET state = 'running', started_at = COALESCE(started_at, ?),
+                   SET state = 'submitting', started_at = COALESCE(started_at, ?),
                        heartbeat_at = ?, attempt_count = attempt_count + 1,
                        updated_at = ?
                    WHERE id = ? AND state = 'queued'""",
@@ -128,17 +128,109 @@ class JobRepository:
             self.connection.rollback()
             raise
 
+    def active(self) -> dict[str, Any] | None:
+        return _job(
+            self.connection.execute(
+                """SELECT * FROM jobs
+                   WHERE state IN ('submitting', 'running', 'needs_attention')
+                   ORDER BY started_at, id LIMIT 1"""
+            ).fetchone()
+        )
+
+    def stale_active(self, heartbeat_before: str) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """SELECT * FROM jobs
+               WHERE state IN ('submitting','running')
+                 AND heartbeat_at IS NOT NULL AND heartbeat_at < ?
+               ORDER BY heartbeat_at, id""",
+            (heartbeat_before,),
+        )
+        return [dict(row) for row in rows]
+
+    def has_event(self, job_id: str, event_type: str) -> bool:
+        return self.connection.execute(
+            "SELECT 1 FROM job_events WHERE job_id=? AND event_type=? LIMIT 1",
+            (job_id, event_type),
+        ).fetchone() is not None
+
+    def record_submission_intent(self, job_id: str) -> None:
+        with self.connection:
+            row = self.get(job_id)
+            if row is None or row["state"] != "submitting":
+                raise KeyError(job_id)
+            if not self.has_event(job_id, "submission_intent"):
+                self._event(job_id, "submission_intent", {"correlation_id": row["idempotency_key"]})
+            timestamp = utc_now()
+            self.connection.execute(
+                "UPDATE jobs SET heartbeat_at=?, updated_at=? WHERE id=?",
+                (timestamp, timestamp, job_id),
+            )
+
+    def record_backend_acceptance(self, job_id: str, backend_job_id: str) -> None:
+        timestamp = utc_now()
+        with self.connection:
+            cursor = self.connection.execute(
+                """UPDATE jobs SET state='running', backend_job_id=?, heartbeat_at=?, updated_at=?
+                   WHERE id=? AND state IN ('submitting','running')""",
+                (backend_job_id, timestamp, timestamp, job_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(job_id)
+            self.connection.execute(
+                "UPDATE runs SET generation_state='running', started_at=COALESCE(started_at, ?), updated_at=? WHERE id=(SELECT run_id FROM jobs WHERE id=?)",
+                (timestamp, timestamp, job_id),
+            )
+            if not self.has_event(job_id, "backend_accepted"):
+                self._event(job_id, "backend_accepted", {"backend_job_id": backend_job_id})
+
+    def heartbeat(self, job_id: str, detail: dict[str, Any] | None = None) -> None:
+        timestamp = utc_now()
+        with self.connection:
+            cursor = self.connection.execute(
+                "UPDATE jobs SET heartbeat_at=?, updated_at=? WHERE id=? AND state IN ('submitting','running')",
+                (timestamp, timestamp, job_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(job_id)
+            if detail:
+                self._event(job_id, "heartbeat", detail)
+
+    def note_event(self, job_id: str, event_type: str, detail: dict[str, Any] | None = None) -> None:
+        with self.connection:
+            self._event(job_id, event_type, detail)
+
+    def mark_needs_attention(self, job_id: str, reason: str) -> None:
+        timestamp = utc_now()
+        with self.connection:
+            cursor = self.connection.execute(
+                """UPDATE jobs SET state='needs_attention', error_type='RecoveryRequired',
+                   error_message=?, heartbeat_at=?, updated_at=?
+                   WHERE id=? AND state IN ('submitting','running','needs_attention')""",
+                (reason[:2000], timestamp, timestamp, job_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(job_id)
+            self.connection.execute(
+                "UPDATE runs SET generation_state='needs_attention', updated_at=? WHERE id=(SELECT run_id FROM jobs WHERE id=?)",
+                (timestamp, job_id),
+            )
+            self._event(job_id, "needs_attention", {"reason": reason[:2000]})
+
     def succeed(self, job_id: str) -> None:
         timestamp = utc_now()
         with self.connection:
             cursor = self.connection.execute(
                 """UPDATE jobs SET state='succeeded', completed_at=?, heartbeat_at=?,
                    updated_at=?, error_type=NULL, error_message=NULL
-                   WHERE id=? AND state='running'""",
+                   WHERE id=? AND state IN ('submitting','running')""",
                 (timestamp, timestamp, timestamp, job_id),
             )
             if cursor.rowcount != 1:
                 raise KeyError(job_id)
+            self.connection.execute(
+                "UPDATE runs SET generation_state='succeeded', completed_at=?, updated_at=? WHERE id=(SELECT run_id FROM jobs WHERE id=?)",
+                (timestamp, timestamp, job_id),
+            )
             self._event(job_id, "succeeded")
 
     def fail(self, job_id: str, error: BaseException) -> None:
@@ -148,11 +240,15 @@ class JobRepository:
             cursor = self.connection.execute(
                 """UPDATE jobs SET state='failed', completed_at=?, heartbeat_at=?,
                    updated_at=?, error_type=?, error_message=?
-                   WHERE id=? AND state='running'""",
+                   WHERE id=? AND state IN ('submitting','running')""",
                 (timestamp, timestamp, timestamp, type(error).__name__, message, job_id),
             )
             if cursor.rowcount != 1:
                 raise KeyError(job_id)
+            self.connection.execute(
+                "UPDATE runs SET generation_state='failed', completed_at=?, updated_at=? WHERE id=(SELECT run_id FROM jobs WHERE id=?)",
+                (timestamp, timestamp, job_id),
+            )
             self._event(job_id, "failed", {"error_type": type(error).__name__, "message": message})
 
     def events_for_run(self, run_id: str) -> list[dict[str, Any]]:
