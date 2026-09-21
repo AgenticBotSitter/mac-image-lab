@@ -9,6 +9,8 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ### T14 — Responsive visual shell and Library: implementation complete; visual checkpoint awaiting Alastair
 
+Commit: `f9ac4d9c3849539189367bcc0502b025d5e52939`
+
 Implemented:
 - Rebuilt the olive/charcoal shell with restrained gold/green accents, accessible focus treatment, 44px mobile navigation targets, reduced-motion support, and responsive 390/768/1440 layouts.
 - Library artwork begins above the fold with large/medium/compact density and natural/cropped layout controls persisted locally without storing prompts.
@@ -22,6 +24,13 @@ Verification:
 - GREEN: browser/library suite `7 passed`; full suite `112 passed in 5.01s`; Python compilation and diff checks passed.
 - Screenshot render widths exactly matched 390 and 1440 CSS pixels with no horizontal overflow.
 - Human visual-direction review is required before T15 under the approved Gold plan.
+
+R2 milestone artifacts (`head_object` length and SHA-256 metadata verified for every object):
+- Build bundle: `hermes-data/Marvin/Mac Image Lab/builds/t14/2026-09-21/mac-image-lab-t14.bundle` — SHA-256 `8fd45d4e933e8231dcb54b1f1a664e56abcbb2c10e35f684fbe5b3246ceb1a5b`.
+- Desktop Library: `hermes-data/Marvin/Mac Image Lab/validation/t14/2026-09-21/library-desktop.png`.
+- Phone Library: `hermes-data/Marvin/Mac Image Lab/validation/t14/2026-09-21/library-phone.png`.
+- Desktop Create: `hermes-data/Marvin/Mac Image Lab/validation/t14/2026-09-21/create-desktop.png`.
+- Phone Create: `hermes-data/Marvin/Mac Image Lab/validation/t14/2026-09-21/create-phone.png`.
 
 ### T13 — Thumbnail pipeline and scalable Library queries: completed locally
 
