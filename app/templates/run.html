@@ -40,6 +40,7 @@
     <p class="archive-label {% if run.archive_state == 'verified' %}good{% endif %}">
       {% if run.archive_state == 'verified' %}Archive verified in R2{% elif run.archive_state == 'failed' %}R2 archive needs attention{% elif run.archive_state == 'archiving' %}R2 archive in progress{% else %}Stored on this Mac only{% endif %}
     </p>
+    {% if run.resample_notice %}<p class="notice">{{ run.resample_notice }}</p>{% endif %}
     <h3>Prompt</h3>
     <p class="full-prompt prompt-scroll">{{ run.prompt }}</p>
     <dl>
@@ -50,6 +51,19 @@
       <dt>Collection</dt><dd>{{ run.library_folder or 'Not filed yet' }}</dd>
     </dl>
   </aside>
+</section>
+<section class="card organize-card">
+  <h2>Organize image</h2>
+  <form class="inline-form" method="post" action="{{ url_for('update_run_metadata', run_id=run_id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ metadata.revision }}">
+    <label>Title<input name="title" value="{{ metadata.title }}" maxlength="120" required></label>
+    <button type="submit">Save title</button>
+  </form>
+  <div class="action-row">
+    <form method="post" action="{{ url_for('update_run_metadata', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ metadata.revision }}"><input type="hidden" name="favorite" value="{{ 0 if metadata.favorite else 1 }}"><button type="submit" class="secondary">{{ 'Remove favorite' if metadata.favorite else 'Add favorite' }}</button></form>
+    <form method="post" action="{{ url_for('update_run_metadata', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ metadata.revision }}"><input type="hidden" name="trash_action" value="{{ 'restore' if metadata.deleted_at else 'trash' }}"><button type="submit" class="secondary">{{ 'Restore from trash' if metadata.deleted_at else 'Move to trash' }}</button></form>
+  </div>
+  <p class="sub">Trash is reversible and never deletes the technical run or image file automatically.</p>
 </section>
 <section class="card organize-card">
   <h2>Save in Mac library</h2>
@@ -67,6 +81,13 @@
       <button class="secondary" type="submit">Open on host Mac</button>
     </form>
   </details>
+</section>
+<section class="card organize-card export-card">
+  <h2>Export to this device</h2>
+  <p class="sub">These downloads stay on the device using this browser. JPEG uses an explicit white background for transparent pixels; WebP strips embedded metadata.</p>
+  <div class="action-row"><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='png') }}">Original PNG</a><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='jpeg', background='#ffffff') }}">JPEG · white background</a><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='webp') }}">WebP</a><a class="button secondary" href="{{ url_for('export_family_zip', family_id=run.family_id) }}">Family evidence ZIP</a></div>
+  <h3>Create a resized copy</h3><p class="sub">This is a pixel resample, not newly generated detail. It creates a traceable child in the same family and saves it in the host Mac library.</p>
+  <form class="inline-form" method="post" action="{{ url_for('create_resized_export', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><label>Width<input type="number" name="width" min="16" max="8192" placeholder="e.g. 1600"></label><label>Height<input type="number" name="height" min="16" max="8192" placeholder="auto"></label><button type="submit">Create resized copy</button></form>
 </section>
 <dialog id="image-viewer" class="viewer" aria-labelledby="viewer-title">
   <div class="viewer-shell">

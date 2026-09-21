@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import queue
@@ -34,8 +35,10 @@ from imagelab.db import connect_database, initialize_database
 from imagelab.models.registry import registry
 from imagelab.repositories.jobs import JobRepository
 from imagelab.repositories.preferences import PreferenceConflict, PreferenceRepository
+from imagelab.services.organization import MetadataConflict, OrganizationService
 from imagelab.repositories.runs import RunRepository
 from imagelab.services.archive import archive_evidence
+from imagelab.services.exports import ExportError, build_family_zip, convert_image, resize_to_png
 from imagelab.services.generation import enqueue_generation, queue_depth
 from imagelab.services.library import LibraryQuery, LibraryService
 from imagelab.services.media import ThumbnailService
@@ -405,6 +408,21 @@ def file_run_output(run_id: str, relative: str | None) -> str:
         copies.append(rel)
     r["library_folder"] = relative
     write_receipt(run_id, r)
+    members = []
+    for member in (item for item in list_runs() if item.get("family_id") == r["family_id"]):
+        output_meta = member.get("output") or {}
+        members.append({
+            "run_id": member["run_id"], "title": member["title"],
+            "relationship": member.get("relationship", "original"),
+            "parent_run_id": member.get("parent_run_id"),
+            "output_sha256": output_meta.get("sha256"),
+            "dimensions": [output_meta.get("width"), output_meta.get("height")],
+        })
+    manifest = {
+        "schema_version": 1, "family_id": r["family_id"], "collection": relative,
+        "updated_at": now(), "members": members,
+    }
+    storage.atomic_write_beneath(dest_dir, "family.json", (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode())
     return rel
 
 
@@ -950,11 +968,20 @@ def preferred_version_view(family_id: str):
 
 @app.get("/settings")
 def settings_view():
+    connection = initialize_database(database_path())
+    try:
+        organization = OrganizationService(connection)
+        trashed = [RunRepository._receipt_from_row(row) for row in connection.execute("SELECT * FROM runs WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").fetchall()]
+        trash_metadata = {item["run_id"]: organization.metadata(item["run_id"]) for item in trashed}
+    finally:
+        connection.close()
     return render_template(
         "settings.html",
         models=MODELS,
         library_root=GENERATED_ROOT,
         comfy_url=COMFY_URL,
+        trashed=trashed,
+        trash_metadata=trash_metadata,
     )
 
 
@@ -1117,6 +1144,14 @@ def run_view(run_id: str):
         "cancelled": "Generation cancelled",
         "needs_attention": "Recovery review required",
     }
+    connection = initialize_database(database_path())
+    try:
+        try:
+            metadata = OrganizationService(connection).metadata(run_id)
+        except KeyError:
+            metadata = {"title": run["title"], "favorite": bool(run.get("favorite")), "deleted_at": run.get("deleted_at"), "revision": 1}
+    finally:
+        connection.close()
     return render_template(
         "run.html",
         run=run,
@@ -1128,6 +1163,7 @@ def run_view(run_id: str):
         previous_run_id=previous_run_id,
         next_run_id=next_run_id,
         evidence_files=evidence_files,
+        metadata=metadata,
         state_label=state_labels.get(run.get("generation_state"), "Generation status unavailable"),
     )
 
@@ -1155,6 +1191,33 @@ def explore_submit(run_id: str):
         return render_template("error.html", message=str(exc)), 400
 
 
+@app.post("/runs/<run_id>/metadata")
+def update_run_metadata(run_id: str):
+    safe_id(run_id)
+    try:
+        revision = int(request.form.get("revision", ""))
+    except ValueError:
+        return render_template("error.html", message="Invalid metadata revision"), 400
+    title = request.form.get("title") if "title" in request.form else None
+    favorite = request.form.get("favorite") == "1" if "favorite" in request.form else None
+    trash_action = request.form.get("trash_action")
+    trashed = True if trash_action == "trash" else False if trash_action == "restore" else None
+    connection = initialize_database(database_path())
+    try:
+        OrganizationService(connection).update_metadata(
+            run_id, revision=revision, title=title, favorite=favorite, trashed=trashed,
+        )
+    except MetadataConflict:
+        return render_template("error.html", message="This image changed in another tab. Reload it before saving again."), 409
+    except (KeyError, ValueError) as exc:
+        return render_template("error.html", message=str(exc)), 400
+    finally:
+        connection.close()
+    if trashed is True:
+        return redirect(url_for("index"))
+    return redirect(url_for("run_view", run_id=run_id))
+
+
 @app.post("/runs/<run_id>/file")
 def file_view(run_id: str):
     try:
@@ -1167,8 +1230,11 @@ def file_view(run_id: str):
 @app.post("/library/folders")
 def create_folder():
     try:
-        relative = safe_library_rel(request.form.get("folder"))
-        library_dir(relative).mkdir(parents=True, exist_ok=True)
+        connection = initialize_database(database_path())
+        try:
+            OrganizationService(connection, library_root=GENERATED_ROOT).create_collection(request.form.get("folder", ""))
+        finally:
+            connection.close()
         return redirect(url_for("index"))
     except ValueError as exc:
         return render_template("error.html", message=str(exc)), 400
@@ -1254,6 +1320,80 @@ def original_media(run_id: str):
     response.headers["Content-Disposition"] = f'inline; filename="{Path(filename).name}"'
     response.headers["X-Content-SHA256"] = digest
     return response
+
+
+@app.get("/runs/<run_id>/export.<format_name>")
+def export_image(run_id: str, format_name: str):
+    run = read_receipt(run_id)
+    output = run.get("output") or {}
+    source = run_dir(run_id) / str(output.get("file", ""))
+    expected = output.get("sha256")
+    if not source.is_file() or not isinstance(expected, str) or sha256(source) != expected:
+        abort(404)
+    try:
+        data = convert_image(source, format_name, background=request.args.get("background"))
+    except ExportError as exc:
+        return render_template("error.html", message=str(exc)), 400
+    formats = {"png": ("image/png", "png"), "jpeg": ("image/jpeg", "jpg"), "webp": ("image/webp", "webp")}
+    if format_name not in formats:
+        abort(404)
+    mimetype, extension = formats[format_name]
+    return send_file(io.BytesIO(data), mimetype=mimetype, as_attachment=True, download_name=f"{slug(run['title'])}-{run_id[:8]}.{extension}")
+
+
+@app.post("/runs/<run_id>/exports/resized")
+def create_resized_export(run_id: str):
+    parent = read_receipt(run_id)
+    output = parent.get("output") or {}
+    source = run_dir(run_id) / str(output.get("file", ""))
+    if not source.is_file() or sha256(source) != output.get("sha256"):
+        abort(404)
+    try:
+        width = int(request.form["width"]) if request.form.get("width", "").strip() else None
+        height = int(request.form["height"]) if request.form.get("height", "").strip() else None
+        child_id = str(uuid.uuid4())
+        child_directory = run_dir(child_id)
+        child_directory.mkdir(parents=True, exist_ok=False)
+        destination = child_directory / "output.png"
+        actual_width, actual_height = resize_to_png(source, destination, width=width, height=height)
+        child = json.loads(json.dumps(parent))
+        child.update({
+            "run_id": child_id, "family_id": parent["family_id"], "parent_run_id": run_id,
+            "relationship": "resized_export", "title": f"{parent['title']} · {actual_width}×{actual_height} resample",
+            "created_at": now(), "completed_at": now(), "generation_state": "succeeded", "archive_state": "local_only",
+            "status": "local_only", "elapsed_seconds": 0, "library_copies": [], "library_folder": "Exports/Resized",
+            "resample_notice": "Pixel resample only; no new model detail was generated.",
+        })
+        child["parameters"] = {**(parent.get("parameters") or {}), "width": actual_width, "height": actual_height}
+        with Image.open(destination) as resized_image:
+            output_mode = resized_image.mode
+        child["output"] = {"file": "output.png", "sha256": sha256(destination), "bytes": destination.stat().st_size, "width": actual_width, "height": actual_height, "mode": output_mode}
+        for key in ("comfy_prompt_id", "workflow", "error", "deleted_at", "favorite"):
+            child.pop(key, None)
+        write_receipt(child_id, child)
+        file_run_output(child_id, "Exports/Resized")
+    except (ExportError, ValueError, KeyError) as exc:
+        if "child_directory" in locals():
+            shutil.rmtree(child_directory, ignore_errors=True)
+        return render_template("error.html", message=str(exc)), 400
+    return redirect(url_for("run_view", run_id=child_id))
+
+
+@app.get("/families/<family_id>/export.zip")
+def export_family_zip(family_id: str):
+    safe_id(family_id)
+    connection = initialize_database(database_path())
+    try:
+        receipts = RunRepository(connection).list_receipts(family_id=family_id, include_deleted=True)
+    finally:
+        connection.close()
+    if not receipts:
+        abort(404)
+    try:
+        payload = build_family_zip(RUNS, receipts)
+    except ExportError as exc:
+        return render_template("error.html", message=str(exc)), 400
+    return send_file(io.BytesIO(payload), mimetype="application/zip", as_attachment=True, download_name=f"family-{family_id[:8]}-evidence.zip")
 
 
 @app.get("/runs/<run_id>/download/<name>")

@@ -80,6 +80,7 @@ class RunRepository:
         receipt = json.loads(row["legacy_receipt_json"])
         receipt["generation_state"] = row["generation_state"]
         receipt["archive_state"] = row["archive_state"]
+        receipt["title"] = row["title"]
         receipt["favorite"] = bool(row["favorite"])
         if row["deleted_at"]:
             receipt["deleted_at"] = row["deleted_at"]

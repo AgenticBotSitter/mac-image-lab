@@ -83,6 +83,12 @@ CREATE TABLE IF NOT EXISTS run_collections (
     PRIMARY KEY (run_id, collection_id)
 );
 
+CREATE TABLE IF NOT EXISTS run_metadata_revisions (
+    run_id TEXT PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS model_notes (
     model_id TEXT PRIMARY KEY,
     note TEXT NOT NULL,

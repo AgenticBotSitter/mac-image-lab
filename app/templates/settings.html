@@ -7,5 +7,6 @@
   <article class="card"><h2>Storage</h2><p>Finder library</p><code>{{ library_root }}</code><p>R2 archival remains explicit per run.</p></article>
   <article class="card"><h2>Connections</h2><p>ComfyUI is configured at a loopback-only endpoint.</p><code>{{ comfy_url }}</code><p><a href="{{ url_for('healthz') }}">Open redacted health status</a></p></article>
   <article class="card"><h2>Guides</h2><p><a href="{{ url_for('styles') }}">Qwen prompt and style guides</a></p></article>
+  <article class="card trash-card"><h2>Trash</h2><p>Items stay recoverable. Image Lab never purges them automatically.</p>{% if trashed %}<div class="trash-list">{% for run in trashed %}<div><a href="{{ url_for('run_view', run_id=run.run_id) }}">{{ run.title }}</a><form method="post" action="{{ url_for('update_run_metadata', run_id=run.run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="revision" value="{{ trash_metadata[run.run_id].revision }}"><input type="hidden" name="trash_action" value="restore"><button type="submit" class="secondary">Restore</button></form></div>{% endfor %}</div>{% else %}<p class="sub">Trash is empty.</p>{% endif %}</article>
 </section>
 {% endblock %}

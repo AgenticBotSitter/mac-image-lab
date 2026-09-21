@@ -7,6 +7,10 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T19 — Collections, metadata, reversible trash, and exports: completed locally
+
+Implemented safe nested Finder collections with symlink/traversal rejection, duplicate-safe copies and family manifests; revision-checked titles and favorites; reversible non-destructive trash with restore controls; exact PNG, explicit-background JPEG, metadata-stripped WebP, traceable resized-child exports; and bounded family/evidence ZIP downloads with safe member names and verified output hashes. Final suite: `137 passed`.
+
 ### T18 — Two-version comparison workspace: completed
 
 Commit: `6236149bd6d4305b6dfdc19fc3a3fb2c1ec94a0d`
@@ -353,7 +357,7 @@ R2 status:
 
 ## Next task
 
-T19 — add favorites, collections, reversible trash, titles, optimistic metadata edits, and PNG/JPEG/WebP/resized/family-ZIP/evidence exports.
+T20 — prepare pinned Waitress and launchd service definitions, inspect existing process ownership, then stop for explicit production cutover approval before changing live services.
 
 ## Constraints carried forward
 
