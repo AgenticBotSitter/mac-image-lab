@@ -650,7 +650,25 @@ def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = No
 
 @app.get("/")
 def index():
-    return render_template("index.html", models=MODELS, profiles=PROFILES, runs=list_runs(limit=40), folders=list_library_folders(), comfy_url=COMFY_URL, model_notes=load_model_notes())
+    return render_template(
+        "library.html",
+        runs=list_runs(limit=40),
+        families=family_groups(),
+        folders=list_library_folders(),
+        models=MODELS,
+    )
+
+
+@app.get("/create")
+def create_view():
+    return render_template(
+        "create.html",
+        models=MODELS,
+        profiles=PROFILES,
+        folders=list_library_folders(),
+        comfy_url=COMFY_URL,
+        model_notes=load_model_notes(),
+    )
 
 
 @app.get("/styles")
@@ -662,7 +680,7 @@ def styles():
 def model_notes_view(model_id: str):
     try:
         save_model_note(model_id, request.form.get("note", ""))
-        return redirect(url_for("index"))
+        return redirect(url_for("create_view"))
     except ValueError as exc:
         return render_template("error.html", message=str(exc)), 400
 
@@ -688,7 +706,22 @@ def transform_submit():
 
 @app.get("/gallery")
 def gallery():
-    return render_template("gallery.html", runs=list_runs(), families=family_groups(), folders=list_library_folders(), models=MODELS)
+    return redirect(url_for("index"))
+
+
+@app.get("/compare")
+def compare_view():
+    return render_template("compare.html", runs=list_runs(limit=100))
+
+
+@app.get("/settings")
+def settings_view():
+    return render_template(
+        "settings.html",
+        models=MODELS,
+        library_root=GENERATED_ROOT,
+        comfy_url=COMFY_URL,
+    )
 
 
 @app.get("/families/<family_id>")
@@ -857,7 +890,7 @@ def create_folder():
     try:
         relative = safe_library_rel(request.form.get("folder"))
         library_dir(relative).mkdir(parents=True, exist_ok=True)
-        return redirect(request.referrer or url_for("gallery"))
+        return redirect(url_for("index"))
     except ValueError as exc:
         return render_template("error.html", message=str(exc)), 400
 

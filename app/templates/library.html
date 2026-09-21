@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Image Library · Mac Image Lab{% endblock %}
+{% block body_class %}library-page{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><p class="eyebrow">IMAGE LIBRARY</p><h1>Image Library</h1><p>{{ runs|selectattr('output')|list|length }} recent images · {{ families|length }} families</p></div>
+  <a class="button" href="{{ url_for('create_view') }}">Create image</a>
+</header>
+<section aria-label="Recent images">
+  {% if runs|selectattr('output')|list %}
+  <div class="image-grid medium">
+    {% for run in runs if run.output %}
+    <a class="image-tile" href="{{ url_for('run_view', run_id=run.run_id) }}">
+      <img src="{{ url_for('download', run_id=run.run_id, name='output.png') }}" alt="{{ run.title }}" loading="lazy">
+      <span class="tile-meta"><b>{{ run.title }}</b><small>{{ run.model_label }}</small></span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <section class="card empty"><h2>No finished images yet</h2><p>Create your first local image or check Queue for incomplete work.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a></section>
+  {% endif %}
+</section>
+<section class="card compact">
+  <h2>Collections</h2>
+  <form class="inline-form" method="post" action="{{ url_for('create_folder') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <label><span class="sr-only">New collection path</span><input name="folder" placeholder="Collections/Floral Studies" required></label>
+    <button type="submit">Create collection</button>
+  </form>
+</section>
+{% endblock %}

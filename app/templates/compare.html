@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Compare · Mac Image Lab{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">RELATED VERSIONS</p><h1>Compare</h1><p>Select related images from a family to inspect their differences.</p></div></header>
+{% set completed = runs|selectattr('output')|list %}
+{% if completed|length >= 2 %}
+<section class="card"><p>The full synchronized comparison viewer arrives in the Compare phase. For now, open a family from the Library to choose versions without triggering generation.</p></section>
+<div class="image-grid compact">{% for run in completed %}<a class="image-tile" href="{{ url_for('run_view', run_id=run.run_id) }}"><img src="{{ url_for('download', run_id=run.run_id, name='output.png') }}" alt="{{ run.title }}" loading="lazy"><span class="tile-meta"><b>{{ run.title }}</b></span></a>{% endfor %}</div>
+{% else %}
+<section class="card empty"><h2>Two images are needed</h2><p>Create or transform another related version, then return here.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a></section>
+{% endif %}
+{% endblock %}

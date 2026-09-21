@@ -7,6 +7,21 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T12 — Shared shell and route compatibility: completed locally
+
+Implemented:
+- Added a common `base.html` shell with consistent Library, Create, Compare, Queue, and Settings navigation and local external JavaScript.
+- `/` is now the image-first Library; `/create` owns text generation; `/gallery` redirects safely to Library. Transform, Queue, Settings, Guides, run, family, and Explore routes remain compatible.
+- Added explicit Compare and Settings states without triggering generation or exposing credentials.
+- Removed the external-referrer redirect from collection creation.
+- Run detail now distinguishes actual output dimensions from requested settings, resolving the final strict expected failure.
+- Error, empty, loading, and incomplete-run states render through the shared shell; templates retain autoescaping and all mutation forms retain CSRF tokens.
+
+TDD evidence:
+- RED: six route tests initially produced five expected failures for the missing Library/Create split, compatibility redirect, shared navigation, safe redirect, and actual-output dimensions.
+- GREEN: route suite `6 passed`; route/regression/security suite `17 passed`; full suite `100 passed in 0.51s`; compilation and diff checks passed with zero expected failures.
+- Route definitions still use the compatibility module while service extraction continues; no live listener or service was restarted.
+
 ### T11 — App factory and request protection: completed locally
 
 Commit: `7e1fa76120ced6b5cd57211f4e587e91feffe7dc`
@@ -239,7 +254,7 @@ R2 status:
 
 ## Next task
 
-T12 — Shared shell and route compatibility: extract the compatibility route map, make Library the landing page, add Create/Compare/Settings routes and consistent errors, remove unsafe referrer redirects, and resolve actual-output dimension display.
+T13 — Thumbnail pipeline and scalable Library queries: derived hash-keyed thumbnails, bounded pagination/filtering, correct completed-image counts, cache validators, and no original-image grid loads.
 
 ## Constraints carried forward
 

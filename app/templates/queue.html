@@ -1,19 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>Generation queue · Mac Image Lab</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="{{ url_for('static', filename='workspace.js') }}" defer></script>
-</head>
-<body>
-<main>
-  <nav><a class="brand" href="/">Mac Image Lab</a><a href="/transform">Transform</a><a href="/gallery">Gallery</a><a aria-current="page" href="/queue">Queue</a></nav>
-  <header class="hero compact"><p class="eyebrow">LOCAL WORK</p><h1>Generation queue</h1><p>Persistent jobs survive browser and web-process restarts. Recovery-required work blocks new heavyweight submissions rather than duplicating them.</p></header>
-  <p id="queue-connection" class="notice" role="status">Connecting to the local queue…</p>
-  <section id="queue-list" class="card" aria-live="polite"><p class="empty">Loading jobs…</p></section>
-</main>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Queue · Mac Image Lab{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">LOCAL WORK</p><h1>Generation queue</h1><p>Persistent jobs survive browser and web-process restarts. Ambiguous work blocks duplicate submission.</p></div></header>
+<p id="queue-connection" class="notice" role="status">Connecting to the local queue…</p>
+<section id="queue-list" class="card" aria-live="polite"><p class="empty">Loading jobs…</p></section>
+{% endblock %}

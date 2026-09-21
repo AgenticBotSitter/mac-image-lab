@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Create · Mac Image Lab{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">LOCAL GENERATION</p><h1>Create</h1><p>One explicit submission creates one durable local job.</p></div><a class="button secondary" href="{{ url_for('transform_view') }}">Transform an image</a></header>
+<section class="two-col">
+  <section class="card">
+    <h2>New image</h2>
+    <form method="post" action="/generate">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="idempotency_key" value="{{ new_idempotency_key() }}">
+      <label>Local image generator
+        <select name="model_id">{% for id, model in models.items() if model.status == 'available' %}<option value="{{ id }}">{{ model.label }} · {{ model.runtime }}</option>{% endfor %}</select>
+      </label>
+      <label>Prompt<textarea name="prompt" required maxlength="4000" placeholder="Describe the finished frame, subject, setting, materials, lighting, and composition."></textarea></label>
+      <div class="form-grid">
+        <label>Quality profile<select name="profile">{% for key,p in profiles.items() %}<option value="{{ key }}">{{ p.label }} · {{ p.width }}×{{ p.height }} · {{ p.steps }} steps</option>{% endfor %}</select></label>
+        <label>Collection<select name="library_folder">{% for folder in folders %}<option value="{{ folder }}">{{ folder }}</option>{% endfor %}</select></label>
+      </div>
+      <details class="advanced"><summary>Advanced controls</summary><div class="form-grid">
+        <label>Width<input name="width" type="number" min="512" max="2752" step="32"></label>
+        <label>Height<input name="height" type="number" min="512" max="2752" step="32"></label>
+        <label>Steps<input name="steps" type="number" min="1" max="80"></label>
+        <label>Seed<input name="seed" type="number" min="0"></label>
+      </div></details>
+      <button type="submit">Queue generation</button>
+    </form>
+  </section>
+  <aside class="card guide">
+    <p class="eyebrow">SELECTED MODEL GUIDE</p><h2>Qwen-Image-2.1</h2>
+    <p>{{ models['qwen-image-2.1-local'].guide.summary }}</p>
+    <h3>Strong at</h3><ul>{% for item in models['qwen-image-2.1-local'].guide.strengths %}<li>{{ item }}</li>{% endfor %}</ul>
+    <h3>Avoid</h3><ul>{% for item in models['qwen-image-2.1-local'].guide.avoid %}<li>{{ item }}</li>{% endfor %}</ul>
+    <p><a href="{{ url_for('styles') }}">Open style guides</a></p>
+    <details><summary>Personal notes</summary><form method="post" action="/models/qwen-image-2.1-local/notes"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><textarea name="note" maxlength="5000">{{ model_notes.get('qwen-image-2.1-local','') }}</textarea><button type="submit" class="secondary">Save notes</button></form></details>
+  </aside>
+</section>
+{% endblock %}

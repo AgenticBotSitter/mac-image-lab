@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Mac Image Lab{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+  <script src="{{ url_for('static', filename='workspace.js') }}" defer></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('index') }}">Mac Image Lab</a>
+    <nav aria-label="Primary">
+      <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Library</a>
+      <a href="{{ url_for('create_view') }}" {% if request.endpoint in ['create_view', 'transform_view'] %}aria-current="page"{% endif %}>Create</a>
+      <a href="{{ url_for('compare_view') }}" {% if request.endpoint == 'compare_view' %}aria-current="page"{% endif %}>Compare</a>
+      <a href="{{ url_for('queue_view') }}" {% if request.endpoint == 'queue_view' %}aria-current="page"{% endif %}>Queue</a>
+      <a href="{{ url_for('settings_view') }}" {% if request.endpoint in ['settings_view', 'styles'] %}aria-current="page"{% endif %}>Settings</a>
+    </nav>
+  </header>
+  <main id="content">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

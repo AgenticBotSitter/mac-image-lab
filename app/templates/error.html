@@ -1,1 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mac Image Lab error</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head><body><main><p><a href="/">← Mac Image Lab</a></p><section class="card"><h1>Operation did not complete</h1><p class="error">{{ message }}</p><p>No completion or archive state has been fabricated.</p></section></main></body></html>
+{% extends "base.html" %}
+{% block title %}Operation did not complete · Mac Image Lab{% endblock %}
+{% block content %}
+<section class="card error-card"><p class="eyebrow">NO STATE FABRICATED</p><h1>Operation did not complete</h1><p class="error">{{ message }}</p><p>Return to the Library or Queue to inspect the current durable state.</p><p><a class="button secondary" href="{{ url_for('index') }}">Library</a> <a class="button secondary" href="{{ url_for('queue_view') }}">Queue</a></p></section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Settings · Mac Image Lab{% endblock %}
+{% block content %}
+<header class="page-head"><div><p class="eyebrow">LOCAL WORKSPACE</p><h1>Settings</h1><p>Availability and storage facts only. Credentials are never shown here.</p></div></header>
+<section class="settings-grid">
+  <article class="card"><h2>Models</h2>{% for id,model in models.items() %}<dl><dt>{{ model.label }}</dt><dd>{{ model.status }} · {{ model.source }} · {{ model.runtime }}</dd></dl>{% endfor %}</article>
+  <article class="card"><h2>Storage</h2><p>Finder library</p><code>{{ library_root }}</code><p>R2 archival remains explicit per run.</p></article>
+  <article class="card"><h2>Connections</h2><p>ComfyUI is configured at a loopback-only endpoint.</p><code>{{ comfy_url }}</code><p><a href="{{ url_for('healthz') }}">Open redacted health status</a></p></article>
+  <article class="card"><h2>Guides</h2><p><a href="{{ url_for('styles') }}">Qwen prompt and style guides</a></p></article>
+</section>
+{% endblock %}

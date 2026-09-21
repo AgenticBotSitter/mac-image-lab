@@ -91,7 +91,6 @@ def test_archive_includes_reference_source(tmp_path, monkeypatch):
     assert f"{lab.R2_PREFIX}/{run_id}/reference.png" in fake.objects
 
 
-@pytest.mark.xfail(strict=True, reason="T03/T12 detail status uses actual output dimensions")
 def test_run_detail_displays_actual_output_dimensions(tmp_path, monkeypatch):
     run_id = "12345678-1234-1234-1234-123456789abc"
     run = tmp_path / run_id
