@@ -29,7 +29,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from imagelab import storage
+from imagelab.db import connect_database, initialize_database
 from imagelab.models.registry import registry
+from imagelab.repositories.runs import RunRepository
 from imagelab.services.archive import archive_evidence
 from imagelab.validation import GenerationRequest, normalize_generation_request
 
@@ -85,6 +87,10 @@ def run_dir(run_id: str) -> Path:
 
 def receipt_path(run_id: str) -> Path:
     return run_dir(run_id) / "receipt.json"
+
+
+def database_path() -> Path:
+    return RUNS.parent / "state" / "library.sqlite3"
 
 
 def model_for(model_id: str) -> dict[str, Any]:
@@ -171,6 +177,12 @@ def normalize_receipt(r: dict[str, Any], run_id: str) -> dict[str, Any]:
 
 
 def read_receipt(run_id: str) -> dict[str, Any]:
+    db = database_path()
+    if db.exists():
+        with connect_database(db) as connection:
+            value = RunRepository(connection).get_receipt(run_id)
+        if value is not None:
+            return normalize_receipt(value, run_id)
     p = receipt_path(run_id)
     if not p.exists():
         abort(404)
@@ -180,10 +192,22 @@ def read_receipt(run_id: str) -> dict[str, Any]:
 def write_receipt(run_id: str, value: dict[str, Any]) -> None:
     for key in ["model_label", "model_source"]:
         value.pop(key, None)
-    storage.atomic_write_beneath(run_dir(run_id), "receipt.json", (json.dumps(value, indent=2, sort_keys=True) + "\n").encode())
+    path = receipt_path(run_id)
+    storage.atomic_write_beneath(path.parent, path.name, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode())
+    connection = initialize_database(database_path())
+    try:
+        with connection:
+            RunRepository(connection).upsert_receipt(value, path, sha256(path))
+    finally:
+        connection.close()
 
 
 def list_runs(limit: int | None = None) -> list[dict[str, Any]]:
+    db = database_path()
+    if db.exists():
+        with connect_database(db) as connection:
+            values = RunRepository(connection).list_receipts(limit=limit)
+        return [normalize_receipt(value, value["run_id"]) for value in values]
     values = []
     for p in RUNS.glob("*/receipt.json"):
         try:

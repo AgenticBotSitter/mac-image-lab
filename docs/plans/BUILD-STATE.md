@@ -7,7 +7,30 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T07 — SQLite source of truth and legacy migration: completed locally
+
+Implemented:
+- Versioned SQLite schema with WAL, foreign keys, busy timeout, indexed runs/families/states, jobs/events, collections, model notes, recipes, family choices, and archive attempts.
+- `RunRepository` for idempotent receipt upserts, indexed reads/search, collection mappings, and favorite state.
+- Application receipt writes now atomically update evidence and SQLite; production reads use SQLite with a legacy-file fallback only when a database has not yet been created.
+- Dry-run-first migration with source receipt SHA-256 inventory, explicit malformed-record reporting/quarantine, schema-v1 Qwen model inference from recorded asset filenames only, idempotent reruns, collection/model-note import, and hash reconciliation.
+- SQLite online backup and isolated restore rehearsal.
+- Operator documentation in `docs/database-and-migration.md`.
+
+Real migration evidence:
+- Dry run: 3 valid receipts, 0 malformed, 0 hash mismatches; no database write.
+- Apply: 3 imported, 3 database rows, all 3 receipt hashes reconciled.
+- `PRAGMA integrity_check`: `ok`.
+- Backup: 122,880 bytes; isolated restore: 3 rows and integrity `ok`.
+
+TDD evidence:
+- RED: migration tests initially failed because `imagelab.db` did not exist; repository tests initially failed because `imagelab.repositories` did not exist; legacy-v1 inference initially reported the valid archived Qwen run as malformed.
+- GREEN: focused migration/repository/app/regression suite `19 passed, 2 xfailed`; full suite `60 passed, 2 xfailed in 0.36s`; compile and diff checks passed.
+- Remaining strict xfails belong to T08 persistent idempotent enqueue and T12 actual-output display.
+
 ### T06 — Atomic evidence and complete archival: completed locally
+
+Commit: `948d7fe62fb91c782ba264eb74eb93f82638aae8`
 
 Implemented:
 - Atomic replacement for mutable receipts and model notes.
@@ -133,7 +156,7 @@ R2 status:
 
 ## Next task
 
-T07 — Introduce the local SQLite source of truth and idempotent legacy migration with dry-run, malformed-record quarantine, count/hash reconciliation, SQLite backup, and isolated rollback rehearsal.
+T08 — Persist jobs and split the generation worker: transactional idempotent enqueue, atomic claim, independent worker process, duplicate-submit protection, and restart-surviving queue state.
 
 ## Constraints carried forward
 
