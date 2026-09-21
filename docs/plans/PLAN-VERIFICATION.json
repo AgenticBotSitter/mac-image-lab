@@ -1,0 +1,46 @@
+{
+  "status": "plan_verified_not_implemented",
+  "verified_at": "2026-09-21T15:15:11.975607+00:00",
+  "task_count": 24,
+  "task_ids": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24"
+  ],
+  "baseline_tests": "9 passed",
+  "objects": [
+    {
+      "key": "Marvin/Mac Image Lab/docs/plans/GOLD-BUILD-PLAN.md",
+      "bytes": 38222,
+      "sha256": "4f07edd365b1782b23a15f8a4c817f76517b59ce904f2788be66e64ebd7bdb84",
+      "head_verified": true
+    },
+    {
+      "key": "Marvin/Mac Image Lab/docs/plans/BUILDER-HANDOFF.md",
+      "bytes": 3577,
+      "sha256": "77e4786084ba23782242aaa7c968ffc6af4b3ca5b7225a3ea3a82682e2617b6e",
+      "head_verified": true
+    }
+  ]
+}
