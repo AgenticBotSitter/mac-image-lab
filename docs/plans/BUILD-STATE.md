@@ -7,7 +7,11 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
-### T19 — Collections, metadata, reversible trash, and exports: completed locally
+### T19 — Collections, metadata, reversible trash, and exports: completed
+
+Commit: `eff738d27e1dd0164329ce601d1de0d67cffc053`
+R2 bundle: `hermes-data/Marvin/Mac Image Lab/builds/t19/2026-09-21/mac-image-lab-t19.bundle` — SHA-256 `f76b51f1b9cf5bcba9ba6a4f538f03b7c45a65ed62c17d5c194de6f6030026b7`; `head_object` verified.
+Visual evidence: `organization-desktop.png` and `organization-phone.png` under the same R2 prefix; both `head_object` verified.
 
 Implemented safe nested Finder collections with symlink/traversal rejection, duplicate-safe copies and family manifests; revision-checked titles and favorites; reversible non-destructive trash with restore controls; exact PNG, explicit-background JPEG, metadata-stripped WebP, traceable resized-child exports; and bounded family/evidence ZIP downloads with safe member names and verified output hashes. Final suite: `137 passed`.
 
