@@ -7,7 +7,24 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T04 — Harden image ingestion: completed locally
+
+Implemented:
+- `imagelab/storage.py` performs compressed-size, declared/decoded format, full-decode, decoded-pixel, still-image, and corruption checks.
+- EXIF orientation is applied to a normalized PNG derivative; ordinary inference/export derivative metadata is stripped.
+- Original and derivative bytes retain independent SHA-256 provenance. The original upload is stored privately with a fixed internal name; the browser filename is never used as a path.
+- Original, derivative, workflow, and receipt are written atomically in a staged run directory. The normalized derivative is atomically copied to ComfyUI input; failures clean the staged run and backend file.
+- Transform receipts now distinguish original source from inference derivative and record normalized dimensions, format, mode, orientation handling, and both hashes.
+- HEIC remains explicitly unsupported in this release rather than misleadingly accepted.
+
+TDD evidence:
+- RED: `tests/test_uploads.py` first failed because `imagelab/storage.py` did not exist. Integration tests then failed because the old transform saved only raw uploads and surfaced Pillow errors directly.
+- GREEN: upload suite `14 passed`; Python compile passed; full suite `40 passed, 3 xfailed in 0.29s`.
+- Coverage includes forged MIME, corrupt/truncated input, 20 MiB/413 limit, 50-million decoded-pixel limit, animation, EXIF orientation, metadata removal, traversal, atomic writes, malicious browser filename, staged cleanup, and simulated backend-write failure.
+
 ### T03 — Normalize generation requests: completed locally
+
+Commit: `bb1d905c9f50cee6378777d61541d42140c59d4d`
 
 Implemented:
 - Immutable `GenerationRequest` and one pure normalization path in `imagelab/validation.py`.
@@ -80,7 +97,7 @@ R2 status:
 
 ## Next task
 
-T04 — Harden reference-image ingestion: compressed and decoded pixel limits, Pillow bomb handling, full decode, animation rejection, EXIF transpose derivative, original/derivative hashes, staged atomic writes, safe cleanup, and upload failure tests.
+T05 — Extract the typed model contract, verified registry, and exact Qwen text/reference adapter. Keep only Qwen selectable, move graph construction out of the web layer, add contract/wiring tests, and retire the contradictory legacy reference-upload route.
 
 ## Constraints carried forward
 

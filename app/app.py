@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import mimetypes
 import os
@@ -30,6 +29,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from imagelab import storage
 from imagelab.validation import normalize_generation_request
 
 RUNS = ROOT / "runs"
@@ -249,69 +249,81 @@ def create_reference_transform(form: dict[str, str], upload: Any) -> str:
         profiles=PROFILES,
         available_models={key for key, value in MODELS.items() if value["status"] == "available"},
     )
-    if not upload or upload.mimetype not in IMAGE_TYPES:
+    if not upload:
         raise ValueError("Upload a PNG, JPEG, or WebP image")
-    data = upload.read()
-    if not data or len(data) > MAX_UPLOAD_BYTES:
-        raise ValueError("Image must be non-empty and 20 MiB or smaller")
-    with Image.open(io.BytesIO(data)) as image:
-        source_width, source_height = image.size
+    ingested = storage.ingest_reference(upload.read(), upload.mimetype or "")
     folder = safe_library_rel(form.get("library_folder") or "Inbox")
 
     run_id = str(uuid.uuid4())
-    d = RUNS / run_id
-    d.mkdir(parents=True)
-    suffix = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[upload.mimetype]
-    ref_name = f"mac-image-lab-reference-{run_id}{suffix}"
-    (d / ("reference" + suffix)).write_bytes(data)
-    (COMFY_ROOT / "input" / ref_name).write_bytes(data)
-    workflow = build_reference_edit_workflow(
-        normalized.prompt,
-        normalized.steps,
-        normalized.seed,
-        normalized.resolution,
-        f"mac-image-lab-{run_id}",
-        ref_name,
-    )
-    (d / "workflow.json").write_text(json.dumps(workflow, indent=2) + "\n")
-    receipt = {
-        "schema_version": 2,
-        "run_id": run_id,
-        "created_at": now(),
-        "status": "queued",
-        "title": form.get("title", "").strip() or "Reference transform",
-        "model_id": normalized.model_id,
-        "profile": normalized.profile,
-        "prompt": normalized.prompt,
-        "parameters": {
-            "width": normalized.width,
-            "height": normalized.height,
-            "steps": normalized.steps,
-            "seed": normalized.seed,
-            "sampler": "euler",
-            "scheduler": "simple",
-            "cfg": 1.0,
-            "resolution": normalized.resolution,
-        },
-        "workflow": workflow,
-        "family_id": run_id,
-        "parent_run_id": None,
-        "relationship": "reference_transform",
-        "library_folder": folder,
-        "library_copies": [],
-        "archive_state": "local_only",
-        "reference_edit": {
-            "enabled": True,
-            "experimental": True,
-            "preservation": "best effort; do not promise exact likeness",
-            "source_file": "reference" + suffix,
-            "source_width": source_width,
-            "source_height": source_height,
-            "source_sha256": hashlib.sha256(data).hexdigest(),
-        },
-    }
-    write_receipt(run_id, receipt)
-    return run_id
+    RUNS.mkdir(parents=True, exist_ok=True)
+    stage = RUNS / f".staging-{run_id}"
+    final = RUNS / run_id
+    ref_name = f"mac-image-lab-reference-{run_id}.png"
+    backend_path: Path | None = None
+    try:
+        stage.mkdir(exist_ok=False)
+        storage.atomic_write_beneath(stage, "reference-original" + ingested.original_suffix, ingested.original_bytes)
+        storage.atomic_write_beneath(stage, "reference.png", ingested.derivative_bytes)
+        workflow = build_reference_edit_workflow(
+            normalized.prompt,
+            normalized.steps,
+            normalized.seed,
+            normalized.resolution,
+            f"mac-image-lab-{run_id}",
+            ref_name,
+        )
+        storage.atomic_write_beneath(stage, "workflow.json", (json.dumps(workflow, indent=2) + "\n").encode())
+        receipt = {
+            "schema_version": 2,
+            "run_id": run_id,
+            "created_at": now(),
+            "status": "queued",
+            "title": form.get("title", "").strip() or "Reference transform",
+            "model_id": normalized.model_id,
+            "profile": normalized.profile,
+            "prompt": normalized.prompt,
+            "parameters": {
+                "width": normalized.width,
+                "height": normalized.height,
+                "steps": normalized.steps,
+                "seed": normalized.seed,
+                "sampler": "euler",
+                "scheduler": "simple",
+                "cfg": 1.0,
+                "resolution": normalized.resolution,
+            },
+            "workflow": workflow,
+            "family_id": run_id,
+            "parent_run_id": None,
+            "relationship": "reference_transform",
+            "library_folder": folder,
+            "library_copies": [],
+            "archive_state": "local_only",
+            "reference_edit": {
+                "enabled": True,
+                "experimental": True,
+                "preservation": "best effort; do not promise exact likeness",
+                "source_file": "reference-original" + ingested.original_suffix,
+                "inference_file": "reference.png",
+                "source_width": ingested.width,
+                "source_height": ingested.height,
+                "source_format": ingested.source_format,
+                "source_mode": ingested.mode,
+                "exif_transposed": ingested.exif_transposed,
+                "source_sha256": ingested.original_sha256,
+                "original_sha256": ingested.original_sha256,
+                "derivative_sha256": ingested.derivative_sha256,
+            },
+        }
+        storage.atomic_write_beneath(stage, "receipt.json", (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
+        backend_path = storage.atomic_write_beneath(COMFY_ROOT / "input", ref_name, ingested.derivative_bytes)
+        os.replace(stage, final)
+        return run_id
+    except Exception:
+        shutil.rmtree(stage, ignore_errors=True)
+        if backend_path is not None:
+            backend_path.unlink(missing_ok=True)
+        raise
 
 
 def http_json(path: str, method: str = "GET", data: dict[str, Any] | None = None, timeout: int = 30) -> dict[str, Any]:
