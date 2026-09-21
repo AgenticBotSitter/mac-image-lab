@@ -28,6 +28,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs"
 REFERENCES = ROOT / "references"
+MODEL_NOTES = ROOT / "model-notes.json"
 LOGS = ROOT / "logs"
 COMFY_ROOT = Path.home() / "hermes-data/Marvin/Projects/Local Image Generation/Qwen-Image-2.1/ComfyUI"
 COMFY_URL = os.environ.get("MAC_IMAGE_LAB_COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
@@ -131,6 +132,26 @@ def list_library_folders() -> list[str]:
         if p.is_dir() and not p.name.startswith("."):
             values.append(p.relative_to(GENERATED_ROOT).as_posix())
     return sorted(set(values), key=lambda x: (x.lower() != "inbox", x.lower()))
+
+
+def load_model_notes() -> dict[str, str]:
+    if not MODEL_NOTES.exists():
+        return {}
+    try:
+        value = json.loads(MODEL_NOTES.read_text())
+        return value if isinstance(value, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_model_note(model_id: str, note: str) -> None:
+    if model_id not in MODELS:
+        raise ValueError("Unknown model")
+    if len(note) > 5000:
+        raise ValueError("Personal note must be 5,000 characters or fewer")
+    notes = load_model_notes()
+    notes[model_id] = note.strip()
+    MODEL_NOTES.write_text(json.dumps(notes, indent=2, sort_keys=True) + "\n")
 
 
 def slug(text: str) -> str:
@@ -381,7 +402,21 @@ def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = No
 
 @app.get("/")
 def index():
-    return render_template("index.html", models=MODELS, profiles=PROFILES, runs=list_runs(limit=40), folders=list_library_folders(), comfy_url=COMFY_URL)
+    return render_template("index.html", models=MODELS, profiles=PROFILES, runs=list_runs(limit=40), folders=list_library_folders(), comfy_url=COMFY_URL, model_notes=load_model_notes())
+
+
+@app.get("/styles")
+def styles():
+    return render_template("styles.html")
+
+
+@app.post("/models/<model_id>/notes")
+def model_notes_view(model_id: str):
+    try:
+        save_model_note(model_id, request.form.get("note", ""))
+        return redirect(url_for("index"))
+    except ValueError as exc:
+        return render_template("error.html", message=str(exc)), 400
 
 
 @app.get("/gallery")
@@ -429,7 +464,7 @@ def run_view(run_id: str):
 
 @app.get("/runs/<run_id>/explore")
 def explore_view(run_id: str):
-    return render_template("explore.html", run=read_receipt(run_id), models=MODELS, profiles=PROFILES, folders=list_library_folders())
+    return render_template("explore.html", run=read_receipt(run_id), models=MODELS, profiles=PROFILES, folders=list_library_folders(), mode=request.args.get("mode", ""))
 
 
 @app.post("/runs/<run_id>/explore")
