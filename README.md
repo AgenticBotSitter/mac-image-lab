@@ -15,7 +15,11 @@ This is an independent, macOS/Apple-MPS implementation. It does **not** reuse Sp
 - Binds only to `127.0.0.1`; no public share mode, tunnel, social publishing, store actions, or payments.
 - Calls an existing local ComfyUI endpoint (default: `http://127.0.0.1:8188`).
 - Offers Fast (768² / 8 steps), Standard (1024² / 20 steps), and Maximum Native (1696×2528 / 25 steps) profiles, plus validated custom dimensions and seed.
+- Uses a model registry: the selector currently exposes the verified local Qwen-Image-2.1 adapter and its model-specific prompting guidance; future adapters must pass their own validation before they become selectable.
 - Uses one worker queue to protect unified memory on Apple Silicon.
+- Creates image families for controlled variations and prompt revisions, preserving the parent/source run and selected model.
+- Provides an image-first full gallery with responsive density controls, search, model filtering, and family grouping.
+- Files completed images beneath `~/Documents/Mac Image Lab/Generated Images/` using safe nested subfolders, while retaining canonical technical evidence separately.
 - Records prompt, exact API workflow, model filenames, parameters, prompt ID, timings, output hash, dimensions, ComfyUI history, and status for every run.
 - Provides history plus output, receipt, workflow, and ComfyUI-history downloads.
 - Archives a completed run only when explicitly requested, and marks it complete only after every R2 object passes `head_object` verification.
