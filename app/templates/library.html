@@ -6,9 +6,30 @@
   <div><p class="eyebrow">IMAGE LIBRARY</p><h1>Image Library</h1><p>{{ page.total_images }} images · {{ page.total_families }} families</p></div>
   <a class="button" href="{{ url_for('create_view') }}">Create image</a>
 </header>
+<section class="library-bar" aria-label="Library controls">
+  <div class="segmented" aria-label="Grid density">
+    <button type="button" data-density="large" aria-label="Large density">Large</button>
+    <button type="button" data-density="medium" aria-label="Medium density" class="active">Medium</button>
+    <button type="button" data-density="compact" aria-label="Compact density">Compact</button>
+  </div>
+  <div class="segmented" aria-label="Image layout">
+    <button type="button" data-layout="natural" aria-label="Natural layout" class="active">Natural</button>
+    <button type="button" data-layout="cropped" aria-label="Cropped layout">Cropped</button>
+  </div>
+  <button type="button" id="filter-toggle" class="secondary" aria-expanded="{{ 'true' if (query.search or query.model or query.collection or query.favorite or query.family_view) else 'false' }}" aria-controls="filter-panel">Filters</button>
+</section>
+<form id="filter-panel" class="filter-panel" method="get" action="{{ url_for('index') }}" {% if not (query.search or query.model or query.collection or query.favorite or query.family_view) %}hidden{% endif %}>
+  <label>Search<input type="search" name="search" value="{{ query.search }}" maxlength="200" placeholder="Prompt or title"></label>
+  <label>Model<select name="model"><option value="">All models</option>{% for id,model in models.items() %}<option value="{{ id }}" {% if query.model == id %}selected{% endif %}>{{ model.label }}</option>{% endfor %}</select></label>
+  <label>Collection<select name="collection"><option value="">All collections</option>{% for folder in folders %}<option value="{{ folder }}" {% if query.collection == folder %}selected{% endif %}>{{ folder }}</option>{% endfor %}</select></label>
+  <label>Sort<select name="sort"><option value="newest" {% if query.sort == 'newest' %}selected{% endif %}>Newest</option><option value="oldest" {% if query.sort == 'oldest' %}selected{% endif %}>Oldest</option><option value="title" {% if query.sort == 'title' %}selected{% endif %}>Title</option></select></label>
+  <label class="check"><input type="checkbox" name="favorite" value="1" {% if query.favorite %}checked{% endif %}> Favorites only</label>
+  <label class="check"><input type="checkbox" name="view" value="family" {% if query.family_view %}checked{% endif %}> One image per family</label>
+  <button type="submit">Apply filters</button><a class="button secondary" href="{{ url_for('index') }}">Clear</a>
+</form>
 <section aria-label="Recent images">
   {% if runs|selectattr('output')|list %}
-  <div class="image-grid medium">
+  <div id="image-grid" class="image-grid medium natural">
     {% for run in runs if run.output %}
     <a class="image-tile" href="{{ url_for('run_view', run_id=run.run_id) }}">
       <img src="{{ url_for('thumbnail', run_id=run.run_id, size=640) }}" width="{{ run.output.width }}" height="{{ run.output.height }}" alt="{{ run.title }}" loading="lazy" decoding="async">
@@ -17,7 +38,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <section class="card empty"><h2>No finished images yet</h2><p>Create your first local image or check Queue for incomplete work.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a></section>
+  <section class="card empty">{% if query.search or query.model or query.collection or query.favorite or query.family_view %}<h2>No images match these filters</h2><p>Clear or adjust the filters; no image records were changed.</p><a class="button secondary" href="{{ url_for('index') }}">Clear filters</a>{% else %}<h2>No finished images yet</h2><p>Create your first local image or check Queue for incomplete work.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a>{% endif %}</section>
   {% endif %}
 </section>
 {% if page.pages > 1 %}<nav class="pagination" aria-label="Library pages">{% if page.page > 1 %}<a href="{{ url_for('index', page=page.page-1, per_page=page.per_page, search=query.search, model=query.model, collection=query.collection, favorite='1' if query.favorite else '') }}">Previous</a>{% endif %}<span>Page {{ page.page }} of {{ page.pages }}</span>{% if page.page < page.pages %}<a href="{{ url_for('index', page=page.page+1, per_page=page.per_page, search=query.search, model=query.model, collection=query.collection, favorite='1' if query.favorite else '') }}">Next</a>{% endif %}</nav>{% endif %}

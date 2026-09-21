@@ -662,6 +662,7 @@ def index():
             collection=request.args.get("collection", "").strip(),
             family_id=request.args.get("family", "").strip(),
             favorite=request.args.get("favorite") == "1",
+            family_view=request.args.get("view") == "family",
             layout=request.args.get("layout", "natural"),
             sort=request.args.get("sort", "newest"),
         )

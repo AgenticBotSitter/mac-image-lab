@@ -18,6 +18,7 @@ class LibraryQuery:
     collection: str = ""
     family_id: str = ""
     favorite: bool = False
+    family_view: bool = False
     layout: str = "natural"
     sort: str = "newest"
 
@@ -67,6 +68,13 @@ class LibraryService:
             values.append(query.family_id)
         if query.favorite:
             clauses.append("r.favorite = 1")
+        if query.family_view:
+            clauses.append(
+                "r.id = (SELECT newer.id FROM runs newer WHERE newer.family_id=r.family_id "
+                "AND newer.deleted_at IS NULL AND newer.generation_state='succeeded' "
+                "AND newer.output_path IS NOT NULL AND newer.output_sha256 IS NOT NULL "
+                "ORDER BY newer.created_at DESC, newer.id DESC LIMIT 1)"
+            )
         if query.collection:
             clauses.append(
                 "EXISTS (SELECT 1 FROM run_collections rc JOIN collections c ON c.id=rc.collection_id "

@@ -73,6 +73,19 @@ def test_library_pagination_is_bounded_and_stable(tmp_path):
     assert page.per_page == 3
 
 
+def test_library_family_view_returns_latest_visible_version_per_family(tmp_path):
+    connection = initialize_database(tmp_path / "library.sqlite3")
+    family = "11111111-1111-1111-1111-111111111111"
+    seed(connection, tmp_path, 1, family_id=family)
+    latest = seed(connection, tmp_path, 2, family_id=family)
+    other = seed(connection, tmp_path, 3)
+
+    page = LibraryService(connection).page(LibraryQuery(family_view=True))
+
+    assert [item["run_id"] for item in page.items] == [other, latest]
+    assert page.total_images == 2
+
+
 def test_library_rejects_unbounded_or_invalid_query_values(tmp_path):
     connection = initialize_database(tmp_path / "library.sqlite3")
     service = LibraryService(connection)

@@ -7,6 +7,47 @@
     });
   }
 
+  const grid = document.getElementById("image-grid");
+  const densityButtons = [...document.querySelectorAll("[data-density]")];
+  const layoutButtons = [...document.querySelectorAll("[data-layout]")];
+  const preference = (key, fallback) => {
+    try { return localStorage.getItem(key) || fallback; } catch (_) { return fallback; }
+  };
+  const applyChoice = (buttons, value, dataKey, classes) => {
+    if (!grid) return;
+    classes.forEach(name => grid.classList.remove(name));
+    grid.classList.add(value);
+    buttons.forEach(button => {
+      const selected = button.dataset[dataKey] === value;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  };
+  if (grid) {
+    applyChoice(densityButtons, preference("mac-image-lab-density", "medium"), "density", ["large", "medium", "compact"]);
+    applyChoice(layoutButtons, preference("mac-image-lab-layout", "natural"), "layout", ["natural", "cropped"]);
+    densityButtons.forEach(button => button.addEventListener("click", () => {
+      const value = button.dataset.density;
+      applyChoice(densityButtons, value, "density", ["large", "medium", "compact"]);
+      try { localStorage.setItem("mac-image-lab-density", value); } catch (_) {}
+    }));
+    layoutButtons.forEach(button => button.addEventListener("click", () => {
+      const value = button.dataset.layout;
+      applyChoice(layoutButtons, value, "layout", ["natural", "cropped"]);
+      try { localStorage.setItem("mac-image-lab-layout", value); } catch (_) {}
+    }));
+  }
+  const filterToggle = document.getElementById("filter-toggle");
+  const filterPanel = document.getElementById("filter-panel");
+  if (filterToggle && filterPanel) {
+    filterToggle.addEventListener("click", () => {
+      const opening = filterPanel.hidden;
+      filterPanel.hidden = !opening;
+      filterToggle.setAttribute("aria-expanded", String(opening));
+      if (opening) filterPanel.querySelector("input, select")?.focus();
+    });
+  }
+
   const list = document.getElementById("queue-list");
   const connection = document.getElementById("queue-connection");
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";

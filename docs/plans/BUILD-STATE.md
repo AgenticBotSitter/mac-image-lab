@@ -7,7 +7,25 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T14 — Responsive visual shell and Library: implementation complete; visual checkpoint awaiting Alastair
+
+Implemented:
+- Rebuilt the olive/charcoal shell with restrained gold/green accents, accessible focus treatment, 44px mobile navigation targets, reduced-motion support, and responsive 390/768/1440 layouts.
+- Library artwork begins above the fold with large/medium/compact density and natural/cropped layout controls persisted locally without storing prompts.
+- Added accessible, server-side search, model, collection, favorite, sort, and one-image-per-family controls with distinct empty and filtered-empty states.
+- Enforced `[hidden]{display:none!important}` and verified its computed browser behavior.
+- Added Playwright browser acceptance against installed Chrome, including no horizontal overflow at 390/768/1440, lazy thumbnail loading, no original PNG grid requests, visible filter transitions, and persisted density/layout.
+- Captured real local-state Library and Create screenshots at 1440px desktop and 390px phone widths under `validation/t14/`.
+
+Verification:
+- RED: the first browser run failed because responsive Library controls and the filter panel did not exist; the first combined collection exposed a duplicate pytest module basename, fixed by making browser tests a package.
+- GREEN: browser/library suite `7 passed`; full suite `112 passed in 5.01s`; Python compilation and diff checks passed.
+- Screenshot render widths exactly matched 390 and 1440 CSS pixels with no horizontal overflow.
+- Human visual-direction review is required before T15 under the approved Gold plan.
+
 ### T13 — Thumbnail pipeline and scalable Library queries: completed locally
+
+Commit: `929be33102565a9e358d4af8181fa8fdcbe55a5c`
 
 Implemented:
 - `ThumbnailService` creates atomic 320/640/960 WebP derivatives keyed by verified output SHA-256, preserving aspect and invalidating naturally when source content changes.
@@ -20,6 +38,11 @@ TDD evidence:
 - RED: media/library tests initially failed collection because the two services did not exist; the route integration test then failed because no thumbnail cache or endpoint existed.
 - GREEN: focused media/library/route suite `15 passed`; full suite `109 passed in 0.78s`; compilation and diff checks passed.
 - No existing output, receipt, or live service was modified.
+
+R2 milestone artifact:
+- Local: `backups/milestones/t13-2026-09-21T184832Z/mac-image-lab-t13.bundle`
+- Verified key: `hermes-data/Marvin/Mac Image Lab/builds/t13/2026-09-21/mac-image-lab-t13.bundle`
+- SHA-256: `93e6d04ea3301d455e7ea37634d83419ef66e89b8863437c2df46005543cc82f`; `head_object` length and metadata matched.
 
 ### T12 — Shared shell and route compatibility: completed locally
 
@@ -275,7 +298,7 @@ R2 status:
 
 ## Next task
 
-T14 — Responsive visual shell and Library: accessible image-first filters, natural/cropped and density controls, verified hidden behavior, 390/768/1440 layout checks, real desktop/mobile screenshots, then Alastair visual review.
+Required human checkpoint — Alastair reviews the Library/Create desktop and phone screenshots. After the visual direction is accepted, continue with T15 fullscreen viewer and run detail.
 
 ## Constraints carried forward
 
