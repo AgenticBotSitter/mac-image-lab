@@ -7,7 +7,11 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
-### T18 — Two-version comparison workspace: completed locally
+### T18 — Two-version comparison workspace: completed
+
+Commit: `6236149bd6d4305b6dfdc19fc3a3fb2c1ec94a0d`
+R2 bundle: `hermes-data/Marvin/Mac Image Lab/builds/t18/2026-09-21/mac-image-lab-t18.bundle` — SHA-256 `02e19c6c2dbb41593d3f318a1f2890ab8d1ca5e12073b2ae434c96c80d566c33`; `head_object` verified.
+Visual evidence: `compare-desktop.png` and `compare-phone.png` under the same R2 prefix; both `head_object` verified.
 
 Implemented a source-aware comparison chooser, side-by-side and reveal-slider modes, synchronized zoom when aspect ratios permit, non-distorting contained images, explicit aspect-ratio warnings, a full settings/prompt diff, exact transform-source comparison, and a persistent preferred-version action. Browser verification covers slider behavior, mismatch safeguards, source provenance, phone overflow, and preferred-version persistence. Final suite: `128 passed`.
 
