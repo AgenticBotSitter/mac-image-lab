@@ -7,6 +7,20 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T13 — Thumbnail pipeline and scalable Library queries: completed locally
+
+Implemented:
+- `ThumbnailService` creates atomic 320/640/960 WebP derivatives keyed by verified output SHA-256, preserving aspect and invalidating naturally when source content changes.
+- Thumbnail responses expose intrinsic dimensions, private immutable caching, ETags, and conditional 304 handling. Hash mismatch, missing media, unsafe names, and unsupported sizes fail closed.
+- `LibraryService` performs bounded SQLite pagination and indexed filtering for search, model, collection, family, favorite, sort, and layout inputs.
+- Library totals count only completed, non-trashed runs with indexed output and count distinct visible families.
+- The Library grid now requests 640px thumbnails with lazy loading and intrinsic dimensions; it does not request original PNGs.
+
+TDD evidence:
+- RED: media/library tests initially failed collection because the two services did not exist; the route integration test then failed because no thumbnail cache or endpoint existed.
+- GREEN: focused media/library/route suite `15 passed`; full suite `109 passed in 0.78s`; compilation and diff checks passed.
+- No existing output, receipt, or live service was modified.
+
 ### T12 — Shared shell and route compatibility: completed locally
 
 Commit: `318b5e0faea66fd81fd5b1a02993233dfb8ced89`
@@ -261,7 +275,7 @@ R2 status:
 
 ## Next task
 
-T13 — Thumbnail pipeline and scalable Library queries: derived hash-keyed thumbnails, bounded pagination/filtering, correct completed-image counts, cache validators, and no original-image grid loads.
+T14 — Responsive visual shell and Library: accessible image-first filters, natural/cropped and density controls, verified hidden behavior, 390/768/1440 layout checks, real desktop/mobile screenshots, then Alastair visual review.
 
 ## Constraints carried forward
 

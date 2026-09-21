@@ -3,7 +3,7 @@
 {% block body_class %}library-page{% endblock %}
 {% block content %}
 <header class="page-head">
-  <div><p class="eyebrow">IMAGE LIBRARY</p><h1>Image Library</h1><p>{{ runs|selectattr('output')|list|length }} recent images · {{ families|length }} families</p></div>
+  <div><p class="eyebrow">IMAGE LIBRARY</p><h1>Image Library</h1><p>{{ page.total_images }} images · {{ page.total_families }} families</p></div>
   <a class="button" href="{{ url_for('create_view') }}">Create image</a>
 </header>
 <section aria-label="Recent images">
@@ -11,7 +11,7 @@
   <div class="image-grid medium">
     {% for run in runs if run.output %}
     <a class="image-tile" href="{{ url_for('run_view', run_id=run.run_id) }}">
-      <img src="{{ url_for('download', run_id=run.run_id, name='output.png') }}" alt="{{ run.title }}" loading="lazy">
+      <img src="{{ url_for('thumbnail', run_id=run.run_id, size=640) }}" width="{{ run.output.width }}" height="{{ run.output.height }}" alt="{{ run.title }}" loading="lazy" decoding="async">
       <span class="tile-meta"><b>{{ run.title }}</b><small>{{ run.model_label }}</small></span>
     </a>
     {% endfor %}
@@ -20,6 +20,7 @@
   <section class="card empty"><h2>No finished images yet</h2><p>Create your first local image or check Queue for incomplete work.</p><a class="button" href="{{ url_for('create_view') }}">Open Create</a></section>
   {% endif %}
 </section>
+{% if page.pages > 1 %}<nav class="pagination" aria-label="Library pages">{% if page.page > 1 %}<a href="{{ url_for('index', page=page.page-1, per_page=page.per_page, search=query.search, model=query.model, collection=query.collection, favorite='1' if query.favorite else '') }}">Previous</a>{% endif %}<span>Page {{ page.page }} of {{ page.pages }}</span>{% if page.page < page.pages %}<a href="{{ url_for('index', page=page.page+1, per_page=page.per_page, search=query.search, model=query.model, collection=query.collection, favorite='1' if query.favorite else '') }}">Next</a>{% endif %}</nav>{% endif %}
 <section class="card compact">
   <h2>Collections</h2>
   <form class="inline-form" method="post" action="{{ url_for('create_folder') }}">

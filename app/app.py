@@ -36,6 +36,8 @@ from imagelab.repositories.jobs import JobRepository
 from imagelab.repositories.runs import RunRepository
 from imagelab.services.archive import archive_evidence
 from imagelab.services.generation import enqueue_generation, queue_depth
+from imagelab.services.library import LibraryQuery, LibraryService
+from imagelab.services.media import ThumbnailService
 from imagelab.services.recovery import BackendDisconnected, BackendSnapshot, SubmissionUncertain
 from imagelab.validation import GenerationRequest, normalize_generation_request
 
@@ -51,6 +53,7 @@ R2_BUCKET = "hermes-data"
 R2_PREFIX = "Marvin/Mac Image Lab/runs"
 LIBRARY_ROOT = Path.home() / "Documents/Mac Image Lab"
 GENERATED_ROOT = LIBRARY_ROOT / "Generated Images"
+THUMBNAIL_ROOT = ROOT / "cache" / "thumbnails"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
@@ -650,10 +653,31 @@ def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = No
 
 @app.get("/")
 def index():
+    try:
+        query = LibraryQuery(
+            page=int(request.args.get("page", "1")),
+            per_page=int(request.args.get("per_page", "40")),
+            search=request.args.get("search", "").strip(),
+            model=request.args.get("model", "").strip(),
+            collection=request.args.get("collection", "").strip(),
+            family_id=request.args.get("family", "").strip(),
+            favorite=request.args.get("favorite") == "1",
+            layout=request.args.get("layout", "natural"),
+            sort=request.args.get("sort", "newest"),
+        )
+        connection = initialize_database(database_path())
+        try:
+            page = LibraryService(connection).page(query)
+        finally:
+            connection.close()
+    except (ValueError, TypeError) as exc:
+        return render_template("error.html", message=str(exc)), 400
+    runs = [normalize_receipt(value, value["run_id"]) for value in page.items]
     return render_template(
         "library.html",
-        runs=list_runs(limit=40),
-        families=family_groups(),
+        runs=runs,
+        page=page,
+        query=query,
         folders=list_library_folders(),
         models=MODELS,
     )
@@ -917,6 +941,29 @@ def archive_view(run_id: str):
     except Exception as exc:
         return render_template("error.html", message=f"Archive failed: {exc}"), 502
     return redirect(url_for("run_view", run_id=run_id))
+
+
+@app.get("/media/<run_id>/thumbnail/<int:size>")
+def thumbnail(run_id: str, size: int):
+    run = read_receipt(run_id)
+    output = run.get("output") or {}
+    filename = output.get("file")
+    digest = output.get("sha256")
+    if not isinstance(filename, str) or Path(filename).name != filename or not isinstance(digest, str):
+        abort(404)
+    try:
+        derived = ThumbnailService(THUMBNAIL_ROOT).get_or_create(run_dir(run_id) / filename, digest, size)
+    except (FileNotFoundError, ValueError):
+        abort(404)
+    if request.headers.get("If-None-Match") == derived.etag:
+        response = app.response_class(status=304)
+    else:
+        response = send_file(derived.path, mimetype="image/webp", conditional=False)
+    response.headers["ETag"] = derived.etag
+    response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+    response.headers["X-Image-Width"] = str(derived.width)
+    response.headers["X-Image-Height"] = str(derived.height)
+    return response
 
 
 @app.get("/runs/<run_id>/download/<name>")
