@@ -18,6 +18,7 @@ Cutover backup: `backups/cutover-20260922T024906Z/library.sqlite3` — isolated 
 Preparation commit: `ebc37c7fe66c5124fefd4c5152672bb0e6549ff9`.
 One-command cutover commits: `923a9df988bb80fe99a4c9efd33905e03ea39113`, `259ceda0f2c8f25f24e613799310f1378478721a`.
 R2 pre-cutover bundle: `hermes-data/Marvin/Mac Image Lab/builds/t20-precutover/2026-09-21/mac-image-lab-t20-precutover.bundle` — SHA-256 `f5805e1a0950004739ce3438c0ebd012a78c2db31d8e80888f9c3d1f6b0e588b`; `head_object` verified.
+R2 completed T20 bundle: `hermes-data/Marvin/Mac Image Lab/builds/t20/2026-09-22/mac-image-lab-t20.bundle` — SHA-256 `66879159dc3a5f6dfaa476510d18cf70acfaa16b995dab5006b87f8abe410d0b`; 239,428 bytes; `head_object` verified.
 
 Verification: install tests `8 passed`; full suite `142 passed`; Python compilation and `git diff --check` passed; post-cutover process ownership, loopback listeners, worker lock, local health, Tailscale health, queue state, backup integrity, key permissions, and service logs verified.
 
