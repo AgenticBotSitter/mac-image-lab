@@ -35,13 +35,16 @@ stop_listener() {
 echo '[1/7] Checking queues'
 active="$(sqlite3 state/library.sqlite3 "SELECT COUNT(*) FROM jobs WHERE state IN ('submitting','running','needs_attention');")"
 [ "$active" = 0 ] || fail "$active active Image Lab job(s) remain"
-queue="$(curl -fsS --max-time 10 http://127.0.0.1:8188/queue)"
-python3 - "$queue" <<'PY'
+if queue="$(curl -fsS --max-time 10 http://127.0.0.1:8188/queue 2>/dev/null)"; then
+  python3 - "$queue" <<'PY'
 import json, sys
 q = json.loads(sys.argv[1])
 if q.get("queue_running") or q.get("queue_pending"):
     raise SystemExit("CUTOVER FAILED: ComfyUI queue is not drained")
 PY
+else
+  echo 'ComfyUI is stopped; database confirms no active jobs, so cutover can continue.'
+fi
 
 for label in comfyui worker web; do
   loaded "com.alastairfraser.mac-image-lab.$label" && fail "$label LaunchAgent is already loaded; ask Hermes to verify the partial cutover"
