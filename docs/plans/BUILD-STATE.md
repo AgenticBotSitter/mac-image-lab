@@ -7,11 +7,22 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T22 — Installable device experience: implementation complete; cross-device checkpoint required
+
+Added a standards-based web manifest, maskable 192/512 icons, root-scoped service worker, install guide, explicit unreachable banner/offline page, and browser-local draft preservation for non-file generation controls. The service worker uses an exact public-shell allowlist and never caches navigations, run pages, APIs, thumbnails, generated/private images, exports, or evidence. Selected source-image files are not persisted. Finder actions remain explicitly host-Mac-only while downloads remain requesting-device actions.
+
+Verification: device/Create browser tests `5 passed`; full suite `148 passed`; Python compilation and `git diff --check` passed. Local phone viewport was 390×844 with no horizontal overflow; unsent prompt survived reload; manifest, service-worker scope header, icon declarations, private-cache exclusion logic, and offline banner were exercised.
+
+**Required checkpoint:** production services must load the committed update, then Alastair must verify the same Tailscale HTTPS URL from another computer and a phone over Wi-Fi and with phone Wi-Fi disabled. The agent cannot truthfully substitute Mac-local browser checks for those device results.
+
 ### T21 — Sleep/reboot semantics and diagnostics: completed
 
 Added generation-scoped idle-sleep protection using `/usr/bin/caffeinate -i -w <worker-pid>` only while the supervised worker owns a `submitting` or `running` job. The assertion is released on success, failure, or worker shutdown; no global power settings change. Added copy-truncate log rotation (10 MiB, three backups) from the worker maintenance loop, preserving launchd's open descriptors without adding a cron. Diagnostics now distinguish cheap web liveness from ComfyUI readiness, report queue/listener/storage/memory state without environment values or process command lines, and explicitly record that per-user LaunchAgents require login and are unavailable before FileVault unlock. Reboot/logout remains deliberately unverified because it requires a separate disruptive-test approval.
 
 Verification: `tests/test_runtime.py`, install tests, and job tests `20 passed`; full suite `146 passed`; compilation and `git diff --check` passed. Live diagnostic evidence at `validation/t21-diagnostics.json` reported liveness/readiness HTTP 200, empty backend queues, both expected loopback listeners, 73,302,700,032 free bytes, 51,539,607,552 physical-memory bytes, and no serialized credentials.
+
+Commit: `c1fd660c157cb164a609e3fb33f561de40c3133b`.
+R2 bundle: `hermes-data/Marvin/Mac Image Lab/builds/t21/2026-09-22/mac-image-lab-t21.bundle` — SHA-256 `4347540893c28b7917693863cc8ee30d872aa69764b4820bbf809db08a20de09`; 245,154 bytes; `head_object` verified.
 
 ### T20 — Supervised production services: completed
 
@@ -382,7 +393,7 @@ R2 status:
 
 ## Next task
 
-T22 — add manifest/icons/install guide, explicit offline/unreachable state, private-image-free service-worker behavior, and safe unsent-input persistence; run real browser checks locally, then stop at the required cross-device checkpoint for another computer and phone.
+T22 checkpoint — apply the committed web/worker update, verify production manifest/service-worker and health, then have Alastair check Library, draft persistence, shared queue, one controlled submission/download, and host-only Finder labeling from another computer and a phone on and off Wi-Fi through Tailscale.
 
 ## Constraints carried forward
 

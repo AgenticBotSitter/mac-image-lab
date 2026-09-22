@@ -715,6 +715,14 @@ def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = No
     return run_id
 
 
+@app.get("/service-worker.js")
+def service_worker():
+    response = send_file(ROOT / "app" / "static" / "service-worker.js", mimetype="application/javascript")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+
 @app.get("/")
 def index():
     try:

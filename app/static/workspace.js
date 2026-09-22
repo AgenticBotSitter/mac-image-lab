@@ -1,4 +1,49 @@
 (() => {
+  const connectionBanner = document.getElementById("connection-banner");
+  const setConnectionState = online => {
+    if (!connectionBanner) return;
+    connectionBanner.hidden = online;
+  };
+  const checkConnection = async () => {
+    if (!navigator.onLine) return setConnectionState(false);
+    try {
+      const response = await fetch("/healthz", {headers: {"Accept": "application/json"}, cache: "no-store"});
+      setConnectionState(response.ok);
+    } catch (_) {
+      setConnectionState(false);
+    }
+  };
+  window.addEventListener("online", checkConnection);
+  window.addEventListener("offline", () => setConnectionState(false));
+  window.setTimeout(checkConnection, 2000);
+  if ("serviceWorker" in navigator && window.isSecureContext && location.protocol === "https:") {
+    window.addEventListener("load", () => {
+      window.setTimeout(() => navigator.serviceWorker.register("/service-worker.js", {scope: "/"}).catch(() => {}), 1500);
+    });
+  }
+
+  const draftFields = ["prompt", "model_id", "profile", "aspect", "library_folder", "width", "height", "steps", "seed"];
+  const draftForm = document.getElementById("generation-form");
+  const draftKey = `mac-image-lab-draft:${location.pathname}`;
+  if (draftForm) {
+    let draft = {};
+    try { draft = JSON.parse(localStorage.getItem(draftKey) || "{}"); } catch (_) {}
+    for (const name of draftFields) {
+      const field = draftForm.elements.namedItem(name);
+      if (field && typeof draft[name] === "string") field.value = draft[name];
+    }
+    const saveDraft = () => {
+      const values = {};
+      for (const name of draftFields) {
+        const field = draftForm.elements.namedItem(name);
+        if (field) values[name] = field.value;
+      }
+      try { localStorage.setItem(draftKey, JSON.stringify(values)); } catch (_) {}
+    };
+    draftForm.addEventListener("input", saveDraft);
+    draftForm.addEventListener("change", saveDraft);
+  }
+
   const recipe = document.getElementById("recipe");
   const prompt = document.getElementById("prompt");
   const applyRecipe = document.getElementById("apply-recipe");
