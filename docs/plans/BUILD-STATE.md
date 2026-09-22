@@ -7,16 +7,19 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
-### T20 — Supervised production services: prepared; cutover approval required
+### T20 — Supervised production services: completed
 
-Pinned Waitress `3.0.2`, added a fail-closed production runner, added owner-only session-key-file loading for the worker, and prepared three loopback-only LaunchAgent templates for Waitress, the generation worker, and ComfyUI. The templates contain no credential values and passed `plutil -lint`. `docs/operations.md` records drain, backup, cutover, verification, and rollback procedures. Current service inspection found the web app and ComfyUI running manually and no supervised generation worker; none of the live processes, installed LaunchAgents, Tailscale routing, or ports were changed.
+Alastair approved and ran the production cutover from Terminal.app. Waitress, the durable generation worker, and ComfyUI are now separate LaunchAgents owned by PID 1. Waitress listens only on `127.0.0.1:7864`; ComfyUI listens only on `127.0.0.1:8188`; the worker holds `state/worker.lock`. Local and Tailscale `/healthz` both returned `status: ok`, ComfyUI reported empty running/pending queues, the session-key file is owner-only (`0600`), and the cutover database backup passed `PRAGMA integrity_check`.
 
-Commit: `ebc37c7fe66c5124fefd4c5152672bb0e6549ff9`.
+Service PIDs at verification: ComfyUI `85341`, worker `85481`, Waitress `85495`; all three LaunchAgents reported `state = running` and had never exited. ComfyUI stderr contains normal startup information and platform capability warnings only; worker and web stderr logs were empty.
+
+Cutover backup: `backups/cutover-20260922T024906Z/library.sqlite3` — isolated integrity check `ok`.
+
+Preparation commit: `ebc37c7fe66c5124fefd4c5152672bb0e6549ff9`.
+One-command cutover commits: `923a9df988bb80fe99a4c9efd33905e03ea39113`, `259ceda0f2c8f25f24e613799310f1378478721a`.
 R2 pre-cutover bundle: `hermes-data/Marvin/Mac Image Lab/builds/t20-precutover/2026-09-21/mac-image-lab-t20-precutover.bundle` — SHA-256 `f5805e1a0950004739ce3438c0ebd012a78c2db31d8e80888f9c3d1f6b0e588b`; `head_object` verified.
 
-Verification: install tests `8 passed`; full suite `142 passed`; Python compilation and `git diff --check` passed.
-
-**Checkpoint:** explicit Alastair approval is required before copying templates into `~/Library/LaunchAgents`, provisioning the session key, stopping manual services, or bootstrapping the replacements.
+Verification: install tests `8 passed`; full suite `142 passed`; Python compilation and `git diff --check` passed; post-cutover process ownership, loopback listeners, worker lock, local health, Tailscale health, queue state, backup integrity, key permissions, and service logs verified.
 
 ### T19 — Collections, metadata, reversible trash, and exports: completed
 
@@ -372,7 +375,7 @@ R2 status:
 
 ## Next task
 
-T20 — awaiting explicit production cutover approval. After approval: drain active work, back up state, install and bootstrap the three supervised services, verify loopback/Tailscale health and process ownership, then perform controlled recovery checks.
+T21 — implement and test generation-scoped idle-sleep prevention, cheap liveness versus backend readiness diagnostics, storage/resource status, redacted diagnostic output, bounded log rotation without a cron, and truthful login/FileVault reboot semantics. Reboot/logout remains unverified unless separately approved.
 
 ## Constraints carried forward
 
