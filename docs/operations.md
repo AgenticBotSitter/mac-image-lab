@@ -7,9 +7,18 @@
 - ComfyUI: `127.0.0.1:8188`; never exposed directly.
 - Session key: owner-only file at `~/.config/mac-image-lab/session-key`; never place its value in a plist, log, Git, or R2.
 
-## Approval checkpoint
+## Production status and approval checkpoint
 
-Do not install, bootstrap, boot out, kick, or replace the live services until Alastair explicitly approves the T20 production cutover. Preparing and validating the repository templates is safe; changing `~/Library/LaunchAgents` or the processes on ports 7864/8188 is the cutover.
+The T20 cutover is complete. Waitress, the generation worker, and ComfyUI are supervised LaunchAgents. Before any future service lifecycle change, drain active work and identify the exact owned label; never terminate an active generation or restart unrelated Python processes.
+
+For a committed web/worker update, use the guarded updater:
+
+```bash
+cd "/Users/alastairfraser/hermes-data/Marvin/Mac Image Lab"
+bash scripts/apply_update.sh
+```
+
+The updater refuses to restart while generation work is active, runs focused checks, reloads only the worker/web labels, and verifies local plus Tailscale health.
 
 ## One-time secret provisioning
 

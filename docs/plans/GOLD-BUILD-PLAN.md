@@ -8,7 +8,7 @@
 
 **Tech stack:** Python, Flask, Jinja, Pillow, sqlite3, Waitress, local ComfyUI on Apple MPS, vanilla JavaScript/CSS, pytest, browser tests, macOS launchd, explicit boto3-verified R2 archives.
 
-**Document status:** Planning deliverable, 2026-09-21. No implementation authorized or performed by the act of writing this document. All proposed paths below are intentional targets, not claims that files exist.
+**Document status:** Build completed and Gold release packaged on 2026-09-22. T01–T24 are implemented and verified; authoritative evidence is in `docs/plans/BUILD-STATE.md` and `docs/releases/gold-release.md`. Explicit residual acceptance gaps are limited to a second-computer walkthrough, one physical post-deployment iPhone **Save Image** report, and the separately approval-gated reboot/FileVault exercise.
 
 ---
 

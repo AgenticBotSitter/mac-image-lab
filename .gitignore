@@ -12,7 +12,11 @@ state/
 cache/thumbnails/
 references/
 exports/
+validation/
 releases/*.zip
+releases/*.bundle
+releases/*.tar.gz
+release-manifest.json
 .comfy-object-info.json
 
 # Local editor and OS files

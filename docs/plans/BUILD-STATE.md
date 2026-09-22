@@ -7,13 +7,41 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
-### T22 — Installable device experience: phone reachability passed; photo-save check required
+### T24 — Gold release: completed
 
-Added a standards-based web manifest, maskable 192/512 icons, root-scoped service worker, install guide, explicit unreachable banner/offline page, and browser-local draft preservation for non-file generation controls. The service worker uses an exact public-shell allowlist and never caches navigations, run pages, APIs, thumbnails, generated/private images, exports, or evidence. Selected source-image files are not persisted. Finder actions remain explicitly host-Mac-only while downloads remain requesting-device actions.
+Completed isolated SQLite backup/restore/migration/rollback rehearsal, release documentation, source allowlist, secret scan, dependency audit, security checks, and final packaging preparation. The online backup, restored copy, and rollback copy all passed `PRAGMA integrity_check` with identical production counts: 8 runs, 5 jobs, and 785 job events. Isolated receipt migration imported all 8 runs; all 8 output hashes matched their receipts. Runtime job/event history is intentionally not reconstructed from receipt-only migration.
 
-Verification: device/Create browser tests `5 passed`; full suite `149 passed`; Python compilation and `git diff --check` passed. Local phone viewport was 390×844 with no horizontal overflow; unsent prompt survived reload; manifest, service-worker scope header, icon declarations, private-cache exclusion logic, and offline banner were exercised. The guarded production update completed with focused tests `6 passed`; launchd replaced the worker/web PIDs under PID 1. Initial real-device access exposed a macOS TCC failure: ordinary Library/Create page rendering scanned the protected `~/Documents` collection tree, leaving all Waitress threads blocked on an unavailable LaunchAgent permission prompt. Collection listing now uses durable receipt state and reserves Documents access for explicit filing actions. After the fix and supervised web reload, local and Tailscale Library/Create routes each returned HTTP 200 in 0.03–0.07 seconds; production web PID `12439` is launchd-owned, backend queue counts are zero, the manifest returns HTTP 200, and `/service-worker.js` returns HTTP 200 with `Service-Worker-Allowed: /`.
+Security/release verification: full suite `155 passed`; focused security/upload/archive/organization checks `30 passed`; Python compilation, JavaScript syntax, and `git diff --check` passed. `pip-audit` initially found advisories in Flask 3.1.2, Pillow 12.0.0, and pytest 8.4.2. Pins and the active environment were upgraded to Flask 3.1.3, Pillow 12.3.0, and pytest 9.0.3; the full suite passed again and the final dependency audit returned **no known vulnerabilities**. The tracked-source allowlist and secret-pattern scan returned no findings.
 
-**Required checkpoint:** Alastair confirmed the production URL opens on iPhone over Wi-Fi and with Wi-Fi disabled while Tailscale remains connected; image download to Files/Downloads works; and **Open on host Mac** is visibly labeled as a host-Mac action. Because iOS browser attachment downloads do not write directly into Photos, the image page now has separate **Save to Photos** and **Download to Files** actions. **Save to Photos** shares the actual PNG file through the native iOS share sheet with explicit **Save Image** guidance and a touch-and-hold fallback. Production deployment and one real iPhone **Save Image** confirmation remain required; another-computer/shared-queue checks remain separately pending.
+Release references: `docs/releases/gold-release.md`, `docs/restore.md`, `docs/operations.md`, and `scripts/release_check.py`. Canonical Gold release bucket: `hermes-data`. Object keys:
+
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/mac-image-lab-gold.bundle`
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/mac-image-lab-gold-source.tar.gz`
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/mac-image-lab-gold-evidence.tar.gz`
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/gold-release.md`
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/WRAP-UP.md`
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/project-memory.md`
+- `Marvin/Mac Image Lab/releases/gold/2026-09-22/release-manifest.json`
+
+The manifest records SHA-256, length, and independent `head_object` results for each release payload. A local upload receipt independently records the manifest object's own `head_object` verification to avoid a self-referential checksum.
+
+### T23 — End-to-end generation and recovery: completed
+
+Real Gold family:
+
+- Original `60a94575-0936-4aa1-a252-27bfb5d06565`: succeeded at 768×768. Waitress was restarted while active; the job continued and HTTPS health recovered.
+- Transform `66d1df1a-8d2b-400b-8309-3357fadb98f3`: succeeded at 768×768 with correct parent/family lineage. The worker was restarted while the backend job was active; reconciliation completed without duplication. Visual QA confirmed the requested blue-to-green change but also material shape, pedestal, framing, and background drift, proving the documented best-effort limitation.
+- Regenerate-larger `d5aa8644-9e56-43ce-83f6-57a24de2fd36`: succeeded at a real 1024×1024 using an affordable 8-step request. Visual QA showed a coherent larger cobalt-blue mug image without text/logo/watermark or rendering failure.
+
+`scripts/release_check.py` verified required workflow/submission/history/output/receipt evidence, hashes, dimensions, and lineage for all three runs. HTTPS download SHA-256 values matched local outputs. Explicit R2 archival completed under `hermes-data/Marvin/Mac Image Lab/runs/<run-id>/`; an independent `head_object` pass verified all 26 objects.
+
+### T22 — Installable device experience: completed with two explicit physical-device gaps
+
+Added the private installable PWA, shell-only service worker, offline banner, safe draft persistence, responsive phone behavior, and separate **Save to Photos** / **Download to Files** actions. A macOS TCC production fault was fixed by removing ordinary page-load scans of the protected Documents tree; Library/Create now use durable receipt state and reserve Documents access for explicit filing actions.
+
+Alastair confirmed iPhone access over Wi-Fi and with Wi-Fi disabled through Tailscale, image download into Files/Downloads, and visible host-Mac-only labeling. The Web Share API now shares the actual PNG to the native iOS sheet with explicit **Save Image** guidance and a touch-and-hold fallback. Automated device/browser checks passed.
+
+Explicit gaps: a separate second-computer walkthrough and one physical report after tapping **Save to Photos → Save Image** were not received. They remain user-device acceptance checks, not unimplemented code. Reboot/FileVault recovery also remains untested because it is disruptive and requires separate approval.
 
 ### T21 — Sleep/reboot semantics and diagnostics: completed
 
@@ -393,12 +421,18 @@ R2 status:
 
 ## Next task
 
-T22 checkpoint — apply the committed web/worker update, verify production manifest/service-worker and health, then have Alastair check Library, draft persistence, shared queue, one controlled submission/download, and host-only Finder labeling from another computer and a phone on and off Wi-Fi through Tailscale.
+Gold implementation is closed. Optional acceptance follow-ups are limited to:
+
+- confirm **Save to Photos → Save Image** on the physical iPhone;
+- repeat the private URL/shared-queue walkthrough on a separate computer;
+- approve a disruptive reboot/FileVault recovery exercise if pre-login semantics need empirical proof.
+
+None requires an implementation change unless the physical check exposes a defect.
 
 ## Constraints carried forward
 
-- Preserve untracked `validation/`; never blanket-add it.
+- `validation/` is gitignored and remains local evidence only.
 - Keep Tailscale-only access and loopback-only app/backend listeners.
 - Keep Qwen-Image-2.1 as the only selectable generator.
-- Do not interrupt live work, cut over services, or modify Tailscale without the plan's approval checkpoint.
+- Drain active work before any service lifecycle change; never restart unrelated Python processes.
 - Explicit R2 archive only; never silently upload personal source images.
