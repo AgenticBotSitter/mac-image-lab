@@ -1,6 +1,6 @@
 # Mac Image Lab Gold Build State
 
-Updated: 2026-09-21 MDT
+Updated: 2026-09-22 MDT
 Branch: `gold-workspace`
 Baseline commit: `081de8f0db5939a8339c0552e82fcd1a85b3b82f`
 Plan: `docs/plans/GOLD-BUILD-PLAN.md`
@@ -24,6 +24,8 @@ Release references: `docs/releases/gold-release.md`, `docs/restore.md`, `docs/op
 - `Marvin/Mac Image Lab/releases/gold/2026-09-22/release-manifest.json`
 
 The manifest records SHA-256, length, and independent `head_object` results for each release payload. A local upload receipt independently records the manifest object's own `head_object` verification to avoid a self-referential checksum.
+
+GitHub publication was explicitly authorized after packaging. Branch `gold-workspace` was pushed to `https://github.com/AgenticBotSitter/mac-image-lab`; both `git ls-remote` and the GitHub branches API returned Gold implementation commit `61ac5c337fac487954510aed328ecf3c675195e9`. The push contains only the tracked public-source allowlist; private runtime and validation paths remain excluded. No merge to `main` or release tag was performed.
 
 ### T23 — End-to-end generation and recovery: completed
 

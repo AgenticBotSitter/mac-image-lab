@@ -3,6 +3,7 @@
 **Release status:** Shipped
 **Release date:** 2026-09-22 MDT
 **Branch:** `gold-workspace`
+**GitHub:** `https://github.com/AgenticBotSitter/mac-image-lab/tree/gold-workspace`
 **Validated generator:** `qwen-image-2.1-local` only
 **Private URL:** `https://alastairs-mac-mini.tail97e4dc.ts.net/`
 
@@ -104,3 +105,13 @@ These are user-device acceptance gaps, not unimplemented code paths. Browser/dev
 - Build record: `docs/plans/BUILD-STATE.md`
 - Gold plan: `docs/plans/GOLD-BUILD-PLAN.md`
 - Release verifier: `scripts/release_check.py`
+
+## Source publication
+
+Alastair explicitly authorized GitHub publication after the private Gold release was packaged and R2-verified. The public-source allowlist excludes credentials, virtual environments, model weights, runtime databases, generated runs and images, private validation evidence, logs, backups, session keys, and R2 configuration.
+
+- Remote: `https://github.com/AgenticBotSitter/mac-image-lab`
+- Published branch: `gold-workspace`
+- Gold implementation commit: `61ac5c337fac487954510aed328ecf3c675195e9`
+- Verification: `git ls-remote` and the GitHub branches API both returned that exact commit immediately after the push.
+- Publication scope: source branch only; no merge into `main`, release tag, or public runtime evidence was implied.
