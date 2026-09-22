@@ -28,6 +28,9 @@ def test_diagnostics_redact_secrets_and_do_not_modify_source(tmp_path):
         git_probe=lambda _root: {"commit": "abc123", "branch": "gold-workspace", "dirty_paths": ["validation/"]},
         queue_probe=lambda _url: {"queue_running": [{"token": fake_secret}], "queue_pending": []},
         listener_probe=lambda _ports: [{"role": "app", "pid": 123, "port": 7864, "command": f"python --api-key {fake_secret}"}],
+        endpoint_probe=lambda _url: {"status": "ok", "http_status": 200, "payload_type": "dict", "secret": fake_secret},
+        storage_probe=lambda _root: {"total_bytes": 10, "used_bytes": 2, "free_bytes": 8},
+        memory_probe=lambda: {"physical_bytes": 48},
         environ={"R2_SECRET_ACCESS_KEY": fake_secret, "SAFE_FLAG": "okay"},
     )
 

@@ -59,6 +59,24 @@ def _git_probe(root: Path) -> dict[str, Any]:
     }
 
 
+def _json_probe(url: str) -> dict[str, Any]:
+    with urlopen(url, timeout=3) as response:
+        payload = json.loads(response.read())
+        return {"status": "ok", "http_status": int(response.status), "payload_type": type(payload).__name__}
+
+
+def _storage_probe(root: Path) -> dict[str, int]:
+    usage = shutil.disk_usage(root)
+    return {"total_bytes": usage.total, "used_bytes": usage.used, "free_bytes": usage.free}
+
+
+def _memory_probe() -> dict[str, int | str]:
+    result = subprocess.run(["/usr/sbin/sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=False)
+    if result.returncode == 0 and result.stdout.strip().isdigit():
+        return {"physical_bytes": int(result.stdout.strip())}
+    return {"status": "unavailable"}
+
+
 def _queue_probe(url: str) -> dict[str, Any]:
     with urlopen(url.rstrip("/") + "/queue", timeout=3) as response:
         payload = json.loads(response.read())
@@ -153,6 +171,9 @@ def collect_diagnostics(
     git_probe: Callable[[Path], dict[str, Any]] = _git_probe,
     queue_probe: Callable[[str], dict[str, Any]] = _queue_probe,
     listener_probe: Callable[[tuple[int, ...]], list[dict[str, Any]]] = _listener_probe,
+    endpoint_probe: Callable[[str], dict[str, Any]] = _json_probe,
+    storage_probe: Callable[[Path], dict[str, Any]] = _storage_probe,
+    memory_probe: Callable[[], dict[str, Any]] = _memory_probe,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Collect a secret-minimized snapshot without modifying project/runtime state."""
@@ -173,6 +194,13 @@ def collect_diagnostics(
         queue = _safe_queue(queue_probe("http://127.0.0.1:8188"))
     except Exception as exc:  # diagnostics must survive unavailable backend
         queue = {"status": "unavailable", "error_type": type(exc).__name__}
+    def endpoint_status(url: str) -> dict[str, Any]:
+        try:
+            value = endpoint_probe(url)
+            return {key: value[key] for key in ("status", "http_status", "payload_type") if key in value}
+        except Exception as exc:
+            return {"status": "unavailable", "error_type": type(exc).__name__}
+
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "project_root": str(root),
@@ -187,6 +215,17 @@ def collect_diagnostics(
         },
         "receipts": {"count": len(receipt_rows), "items": receipt_rows},
         "queue": queue,
+        "health": {
+            "liveness": endpoint_status("http://127.0.0.1:7864/healthz"),
+            "backend_readiness": endpoint_status("http://127.0.0.1:8188/object_info"),
+        },
+        "resources": {"storage": storage_probe(root), "memory": memory_probe()},
+        "availability": {
+            "supervision": "per-user LaunchAgents",
+            "login_required_after_reboot": True,
+            "filevault_prelogin_available": False,
+            "reboot_logout_tested": False,
+        },
         "listeners": _safe_listener_rows(listener_probe((7864, 8188))),
         "dependencies": _dependencies(root),
     }

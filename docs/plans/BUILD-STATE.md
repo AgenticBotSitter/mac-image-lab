@@ -7,6 +7,12 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
+### T21 — Sleep/reboot semantics and diagnostics: completed
+
+Added generation-scoped idle-sleep protection using `/usr/bin/caffeinate -i -w <worker-pid>` only while the supervised worker owns a `submitting` or `running` job. The assertion is released on success, failure, or worker shutdown; no global power settings change. Added copy-truncate log rotation (10 MiB, three backups) from the worker maintenance loop, preserving launchd's open descriptors without adding a cron. Diagnostics now distinguish cheap web liveness from ComfyUI readiness, report queue/listener/storage/memory state without environment values or process command lines, and explicitly record that per-user LaunchAgents require login and are unavailable before FileVault unlock. Reboot/logout remains deliberately unverified because it requires a separate disruptive-test approval.
+
+Verification: `tests/test_runtime.py`, install tests, and job tests `20 passed`; full suite `146 passed`; compilation and `git diff --check` passed. Live diagnostic evidence at `validation/t21-diagnostics.json` reported liveness/readiness HTTP 200, empty backend queues, both expected loopback listeners, 73,302,700,032 free bytes, 51,539,607,552 physical-memory bytes, and no serialized credentials.
+
 ### T20 — Supervised production services: completed
 
 Alastair approved and ran the production cutover from Terminal.app. Waitress, the durable generation worker, and ComfyUI are now separate LaunchAgents owned by PID 1. Waitress listens only on `127.0.0.1:7864`; ComfyUI listens only on `127.0.0.1:8188`; the worker holds `state/worker.lock`. Local and Tailscale `/healthz` both returned `status: ok`, ComfyUI reported empty running/pending queues, the session-key file is owner-only (`0600`), and the cutover database backup passed `PRAGMA integrity_check`.
@@ -376,7 +382,7 @@ R2 status:
 
 ## Next task
 
-T21 — implement and test generation-scoped idle-sleep prevention, cheap liveness versus backend readiness diagnostics, storage/resource status, redacted diagnostic output, bounded log rotation without a cron, and truthful login/FileVault reboot semantics. Reboot/logout remains unverified unless separately approved.
+T22 — add manifest/icons/install guide, explicit offline/unreachable state, private-image-free service-worker behavior, and safe unsent-input persistence; run real browser checks locally, then stop at the required cross-device checkpoint for another computer and phone.
 
 ## Constraints carried forward
 

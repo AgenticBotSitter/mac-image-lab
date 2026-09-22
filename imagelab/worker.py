@@ -12,6 +12,7 @@ from typing import BinaryIO
 
 from imagelab.db import initialize_database
 from imagelab.repositories.jobs import JobRepository
+from imagelab.runtime import IdleSleepAssertion, NullIdleSleepAssertion, SleepAssertion, rotate_logs_copytruncate
 from imagelab.services.recovery import RecoverableBackend, RecoveryCoordinator
 
 
@@ -57,12 +58,18 @@ class PersistentWorker:
         *,
         execute_generation: Callable[[str], None] | None = None,
         backend: RecoverableBackend | None = None,
+        sleep_assertion: SleepAssertion | None = None,
     ):
         if (execute_generation is None) == (backend is None):
             raise ValueError("configure exactly one generation executor or recoverable backend")
         self.database_path = Path(database_path)
         self.execute_generation = execute_generation
         self.backend = backend
+        self.sleep_assertion = sleep_assertion or NullIdleSleepAssertion()
+
+    def _sync_sleep_assertion(self, repository: JobRepository) -> None:
+        active = repository.active()
+        self.sleep_assertion.set_active(active is not None and active["state"] in {"submitting", "running"})
 
     def run_once(self) -> bool:
         connection = initialize_database(self.database_path)
@@ -70,13 +77,16 @@ class PersistentWorker:
             repository = JobRepository(connection)
             job = repository.active()
             if job is not None and job["state"] == "needs_attention":
+                self._sync_sleep_assertion(repository)
                 return False
             if job is None:
                 job = repository.claim_next()
+            self._sync_sleep_assertion(repository)
             if job is None:
                 return False
             if self.backend is not None:
                 RecoveryCoordinator(repository, self.backend).step(job)
+                self._sync_sleep_assertion(repository)
                 return True
             try:
                 assert self.execute_generation is not None
@@ -85,14 +95,23 @@ class PersistentWorker:
                 repository.fail(job["id"], exc)
             else:
                 repository.succeed(job["id"])
+            self._sync_sleep_assertion(repository)
             return True
         finally:
             connection.close()
 
-    def run_forever(self, *, poll_seconds: float = 1.0) -> None:
-        while True:
-            self.run_once()
-            time.sleep(poll_seconds)
+    def run_forever(self, *, poll_seconds: float = 1.0, maintenance_seconds: float = 60.0) -> None:
+        next_maintenance = 0.0
+        try:
+            while True:
+                self.run_once()
+                now = time.monotonic()
+                if now >= next_maintenance:
+                    rotate_logs_copytruncate(Path(__file__).parents[1] / "logs")
+                    next_maintenance = now + maintenance_seconds
+                time.sleep(poll_seconds)
+        finally:
+            self.sleep_assertion.release()
 
 
 def main() -> int:
@@ -110,7 +129,7 @@ def main() -> int:
     # Imported only by the worker entry point; the web module never starts a worker.
     from app.app import recovery_backend
 
-    worker = PersistentWorker(args.database, backend=recovery_backend())
+    worker = PersistentWorker(args.database, backend=recovery_backend(), sleep_assertion=IdleSleepAssertion())
     try:
         with WorkerLeadership(args.lock):
             if args.once:

@@ -94,6 +94,24 @@ Example boot-out command (human-gated):
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.alastairfraser.mac-image-lab.web.plist
 ```
 
+## Sleep, restart, and login semantics
+
+The production worker starts an `/usr/bin/caffeinate -i -w <worker-pid>` assertion only while its SQLite job is in an owned `submitting` or `running` state. It releases the assertion after success, failure, or worker shutdown. This prevents idle system sleep during generation without changing global Energy Saver settings. It does not prevent an intentional shutdown, reboot, logout, or lid-close sleep.
+
+These are per-user LaunchAgents. They restart after the `alastairfraser` GUI session begins. With FileVault enabled they are **not available before the first post-reboot login**. Reboot/logout recovery has not been exercised because that disruptive test requires separate approval; do not describe it as verified.
+
+## Diagnostics and readiness
+
+Run the redacted, read-only report:
+
+```bash
+.venv/bin/python scripts/verify_install.py
+```
+
+`health.liveness` checks the cheap web `/healthz` route. `health.backend_readiness` independently checks ComfyUI `/object_info`; a live web process does not imply that the backend is ready. The report also includes queue counts, loopback listener PIDs, free/used storage, physical memory, dependency pins, receipt hashes, and truthful login/reboot status. Environment values and process command lines are deliberately omitted.
+
+The worker performs copy-truncate maintenance every 60 seconds. Any `logs/*.log` file over 10 MiB is retained as three numbered backups. Copy-truncate preserves launchd's open descriptors and needs no cron or global logging change.
+
 ## Logs and release evidence
 
 Logs live under `logs/` and are excluded from release source. The Gold release archive must contain allowlisted source and documentation only. Upload it under the approved Mac Image Lab R2 prefix and verify every object with `boto3.head_object` before reporting completion.
