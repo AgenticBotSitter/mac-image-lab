@@ -30,9 +30,10 @@
       <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id) }}">New variation</a>
       <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id, mode='larger') }}">Generate larger</a>
       <a class="button secondary" href="{{ url_for('compare_view', left=run_id) }}">Compare</a>
-      <a class="button secondary" href="{{ url_for('download', run_id=run_id, name='output.png') }}">Download to this device</a>
+      <button class="secondary" type="button" data-save-to-photos data-image-url="{{ url_for('download', run_id=run_id, name='output.png') }}" data-filename="image-{{ run_id[:8] }}.png">Save to Photos</button>
+      <a class="button secondary" href="{{ url_for('download', run_id=run_id, name='output.png') }}">Download to Files</a>
     </div>
-    <p class="sub action-note">Repeat uses the same recorded request, but Apple MPS does not guarantee a bit-identical result.</p>
+    <p class="sub action-note" id="save-to-photos-status" aria-live="polite">On iPhone, Save to Photos opens the share sheet; choose <b>Save Image</b>. Repeat uses the same recorded request, but Apple MPS does not guarantee a bit-identical result.</p>
   </div>
   <aside class="card metadata-card">
     <p class="eyebrow">IMAGE DETAILS</p>

@@ -1,4 +1,36 @@
 (() => {
+  const saveToPhotos = document.querySelector("[data-save-to-photos]");
+  if (saveToPhotos) {
+    const status = document.getElementById("save-to-photos-status");
+    saveToPhotos.addEventListener("click", async () => {
+      const imageUrl = saveToPhotos.dataset.imageUrl;
+      const originalLabel = saveToPhotos.textContent;
+      saveToPhotos.disabled = true;
+      saveToPhotos.textContent = "Preparing image…";
+      try {
+        const response = await fetch(imageUrl, {credentials: "same-origin", cache: "no-store"});
+        if (!response.ok) throw new Error(`Image request failed (${response.status})`);
+        const blob = await response.blob();
+        const file = new File([blob], saveToPhotos.dataset.filename || "image.png", {type: blob.type || "image/png"});
+        const payload = {files: [file], title: "Mac Image Lab image"};
+        if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) {
+          await navigator.share(payload);
+          if (status) status.textContent = "Share sheet opened. Choose Save Image to add it to Photos.";
+          return;
+        }
+        window.open(imageUrl, "_blank", "noopener");
+        if (status) status.textContent = "The image opened in a new tab. Touch and hold it, then choose Save to Photos.";
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        window.open(imageUrl, "_blank", "noopener");
+        if (status) status.textContent = "Could not open the share sheet. Touch and hold the opened image, then choose Save to Photos.";
+      } finally {
+        saveToPhotos.disabled = false;
+        saveToPhotos.textContent = originalLabel;
+      }
+    });
+  }
+
   const opener = document.getElementById("viewer-open");
   const dialog = document.getElementById("image-viewer");
   if (!opener || !dialog) return;

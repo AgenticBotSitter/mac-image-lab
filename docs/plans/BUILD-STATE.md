@@ -7,13 +7,13 @@ Plan: `docs/plans/GOLD-BUILD-PLAN.md`
 
 ## Current task
 
-### T22 — Installable device experience: implementation complete; cross-device checkpoint required
+### T22 — Installable device experience: phone reachability passed; photo-save check required
 
 Added a standards-based web manifest, maskable 192/512 icons, root-scoped service worker, install guide, explicit unreachable banner/offline page, and browser-local draft preservation for non-file generation controls. The service worker uses an exact public-shell allowlist and never caches navigations, run pages, APIs, thumbnails, generated/private images, exports, or evidence. Selected source-image files are not persisted. Finder actions remain explicitly host-Mac-only while downloads remain requesting-device actions.
 
 Verification: device/Create browser tests `5 passed`; full suite `149 passed`; Python compilation and `git diff --check` passed. Local phone viewport was 390×844 with no horizontal overflow; unsent prompt survived reload; manifest, service-worker scope header, icon declarations, private-cache exclusion logic, and offline banner were exercised. The guarded production update completed with focused tests `6 passed`; launchd replaced the worker/web PIDs under PID 1. Initial real-device access exposed a macOS TCC failure: ordinary Library/Create page rendering scanned the protected `~/Documents` collection tree, leaving all Waitress threads blocked on an unavailable LaunchAgent permission prompt. Collection listing now uses durable receipt state and reserves Documents access for explicit filing actions. After the fix and supervised web reload, local and Tailscale Library/Create routes each returned HTTP 200 in 0.03–0.07 seconds; production web PID `12439` is launchd-owned, backend queue counts are zero, the manifest returns HTTP 200, and `/service-worker.js` returns HTTP 200 with `Service-Worker-Allowed: /`.
 
-**Required checkpoint:** production services must load the committed update, then Alastair must verify the same Tailscale HTTPS URL from another computer and a phone over Wi-Fi and with phone Wi-Fi disabled. The agent cannot truthfully substitute Mac-local browser checks for those device results.
+**Required checkpoint:** Alastair confirmed the production URL opens on iPhone over Wi-Fi and with Wi-Fi disabled while Tailscale remains connected; image download to Files/Downloads works; and **Open on host Mac** is visibly labeled as a host-Mac action. Because iOS browser attachment downloads do not write directly into Photos, the image page now has separate **Save to Photos** and **Download to Files** actions. **Save to Photos** shares the actual PNG file through the native iOS share sheet with explicit **Save Image** guidance and a touch-and-hold fallback. Production deployment and one real iPhone **Save Image** confirmation remain required; another-computer/shared-queue checks remain separately pending.
 
 ### T21 — Sleep/reboot semantics and diagnostics: completed
 

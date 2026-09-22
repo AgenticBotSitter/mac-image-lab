@@ -103,7 +103,22 @@ def test_run_detail_uses_actual_output_dimensions(tmp_path, monkeypatch):
     response = browser.get(f"/runs/{run_id}")
 
     assert response.status_code == 200
-    assert "1024×896" in response.get_data(as_text=True)
+    page = response.get_data(as_text=True)
+    assert "1024×896" in page
+    assert 'data-save-to-photos' in page
+    assert "Save to Photos" in page
+    assert "choose <b>Save Image</b>" in page
+    assert "Download to Files" in page
+    assert "Host Mac actions" in page
+    assert "Open on host Mac" in page
+
+
+def test_save_to_photos_uses_native_file_share_with_safe_fallback():
+    source = (Path(__file__).parents[1] / "app" / "static" / "viewer.js").read_text()
+    assert "navigator.share(payload)" in source
+    assert "navigator.canShare(payload)" in source
+    assert 'new File([blob]' in source
+    assert "Touch and hold" in source
 
 
 def test_rendered_pages_contain_no_inline_script(tmp_path, monkeypatch):

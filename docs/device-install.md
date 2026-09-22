@@ -18,6 +18,7 @@ There is no LAN fallback. Tailscale must be connected, and the host Mac must be 
 1. Connect Tailscale and open the URL in Safari.
 2. Tap **Share → Add to Home Screen → Add**.
 3. Launch **Image Lab** from the Home Screen.
+4. On an image page, tap **Save to Photos**. In the iOS share sheet, choose **Save Image**. Use **Download to Files** only when a copy in Files/Downloads is intended.
 
 ## Android
 
@@ -41,6 +42,6 @@ Record the device/browser and verify:
 - Create controls retain unsent text after a reload.
 - Queue state matches the Mac.
 - A controlled single submission appears in the same queue; do not submit again while reconnecting.
-- A completed image downloads to the requesting device.
-- **Open on host Mac** is understood as a host-only action.
+- A completed image can be added to iPhone Photos through **Save to Photos → Save Image**; **Download to Files** remains available for Files/Downloads.
+- **Open on host Mac** is visibly labeled and understood as a host-only action.
 - Repeat on a phone first over Wi-Fi, then with Wi-Fi disabled while Tailscale remains connected.
