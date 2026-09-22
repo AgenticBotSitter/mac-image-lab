@@ -151,12 +151,22 @@ def library_dir(relative: str | None) -> Path:
 
 
 def list_library_folders() -> list[str]:
-    ensure_library()
-    values = ["Inbox", "Favorites", "Collections", "Exports/Upscaled", "Exports/Print Size"]
-    for p in GENERATED_ROOT.rglob("*"):
-        if p.is_dir() and not p.name.startswith("."):
-            values.append(p.relative_to(GENERATED_ROOT).as_posix())
-    return sorted(set(values), key=lambda x: (x.lower() != "inbox", x.lower()))
+    """List known collections without touching the TCC-protected Documents tree.
+
+    A supervised LaunchAgent cannot answer an interactive Documents-folder
+    permission prompt. Filesystem access therefore happens only for an explicit
+    filing action; ordinary Library/Create page loads use durable receipt state.
+    """
+    values = {"Inbox", "Favorites", "Collections", "Exports/Upscaled", "Exports/Print Size"}
+    for receipt in list_runs(limit=1000):
+        candidate = str(receipt.get("library_folder") or "").strip()
+        if not candidate:
+            continue
+        try:
+            values.add(safe_library_rel(candidate))
+        except ValueError:
+            continue
+    return sorted(values, key=lambda x: (x.lower() != "inbox", x.lower()))
 
 
 def load_model_notes() -> dict[str, str]:

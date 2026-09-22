@@ -9,6 +9,20 @@ lab = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(lab)
 
 
+def test_collection_listing_does_not_touch_documents(monkeypatch):
+    monkeypatch.setattr(lab, "ensure_library", lambda: (_ for _ in ()).throw(AssertionError("filesystem touched")))
+    monkeypatch.setattr(lab, "list_runs", lambda limit=None: [{"library_folder": "Collections/Floral Studies"}])
+
+    assert lab.list_library_folders() == [
+        "Inbox",
+        "Collections",
+        "Collections/Floral Studies",
+        "Exports/Print Size",
+        "Exports/Upscaled",
+        "Favorites",
+    ]
+
+
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(lab, "RUNS", tmp_path / "runs")
     monkeypatch.setattr(lab, "GENERATED_ROOT", tmp_path / "library")
