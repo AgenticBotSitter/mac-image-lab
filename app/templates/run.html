@@ -30,10 +30,10 @@
       <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id) }}">New variation</a>
       <a class="button secondary" href="{{ url_for('explore_view', run_id=run_id, mode='larger') }}">Generate larger</a>
       <a class="button secondary" href="{{ url_for('compare_view', left=run_id) }}">Compare</a>
-      <button class="secondary" type="button" data-save-to-photos data-image-url="{{ url_for('download', run_id=run_id, name='output.png') }}" data-filename="image-{{ run_id[:8] }}.png">Save to Photos</button>
-      <a class="button secondary" href="{{ url_for('download', run_id=run_id, name='output.png') }}">Download to Files</a>
+      <button class="button" type="button" data-save-to-photos data-image-url="{{ url_for('download', run_id=run_id, name='output.png') }}" data-filename="image-{{ run_id[:8] }}.png">💾 Save to Photos</button>
+      <a class="button secondary subtle-download" href="{{ url_for('download', run_id=run_id, name='output.png') }}">Download</a>
     </div>
-    <p class="sub action-note" id="save-to-photos-status" aria-live="polite">On iPhone, Save to Photos opens the share sheet; choose <b>Save Image</b>. Repeat uses the same recorded request, but Apple MPS does not guarantee a bit-identical result.</p>
+    <p class="sub action-note" id="save-to-photos-status" aria-live="polite">💾 Save to Photos opens the iOS share sheet — tap <b>Save Image</b> to add to your photo library. Repeat uses the same recorded request, but Apple MPS does not guarantee a bit-identical result.</p>
   </div>
   <aside class="card metadata-card">
     <p class="eyebrow">IMAGE DETAILS</p>
@@ -85,8 +85,8 @@
 </section>
 <section class="card organize-card export-card">
   <h2>Export to this device</h2>
-  <p class="sub">These downloads stay on the device using this browser. JPEG uses an explicit white background for transparent pixels; WebP strips embedded metadata.</p>
-  <div class="action-row"><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='png') }}">Original PNG</a><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='jpeg', background='#ffffff') }}">JPEG · white background</a><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='webp') }}">WebP</a><a class="button secondary" href="{{ url_for('export_family_zip', family_id=run.family_id) }}">Family evidence ZIP</a></div>
+  <p class="sub">These downloads stay on the device using this browser. JPEG uses an explicit white background for transparent pixels; WebP strips embedded metadata. On iPhone, each format opens the share sheet — tap <b>Save Image</b> for Photos.</p>
+  <div class="action-row"><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='png') }}" data-export-share data-filename="image-{{ run_id[:8] }}.png">Original PNG</a><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='jpeg', background='#ffffff') }}" data-export-share data-filename="image-{{ run_id[:8] }}.jpg">JPEG · white background</a><a class="button secondary" href="{{ url_for('export_image', run_id=run_id, format_name='webp') }}" data-export-share data-filename="image-{{ run_id[:8] }}.webp">WebP</a><a class="button secondary" href="{{ url_for('export_family_zip', family_id=run.family_id) }}">Family evidence ZIP</a></div>
   <h3>Create a resized copy</h3><p class="sub">This is a pixel resample, not newly generated detail. It creates a traceable child in the same family and saves it in the host Mac library.</p>
   <form class="inline-form" method="post" action="{{ url_for('create_resized_export', run_id=run_id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><label>Width<input type="number" name="width" min="16" max="8192" placeholder="e.g. 1600"></label><label>Height<input type="number" name="height" min="16" max="8192" placeholder="auto"></label><button type="submit">Create resized copy</button></form>
 </section>
