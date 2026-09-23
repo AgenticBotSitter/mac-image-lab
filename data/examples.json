@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Botanical still life",
+    "fields": {
+      "subject": "a clear glass vase with ivory peonies and eucalyptus stems",
+      "style": "editorial photograph",
+      "background": "weathered ochre plaster wall, a dark walnut side table beneath",
+      "composition": "centered",
+      "lighting": "soft window light from the left",
+      "mood": "calm, warm, restrained palette",
+      "materials": "visible water in the vase, glass reflections, delicate petal texture",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "square"
+  },
+  {
+    "name": "Desk workspace",
+    "fields": {
+      "subject": "a vintage typewriter beside a half-finished letter",
+      "style": "editorial photograph",
+      "background": "weathered oak desk, books stacked at the edges, a window with rain",
+      "composition": "overhead flatlay",
+      "lighting": "warm desk lamp from the left",
+      "mood": "nostalgic, moody, writerly",
+      "materials": "aged brass typewriter keys, ink ribbon, rough paper texture, wood grain",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "square"
+  },
+  {
+    "name": "Cafe scene",
+    "fields": {
+      "subject": "a barista pouring latte art into a ceramic cup",
+      "style": "cinematic photograph",
+      "background": "coffee shop interior, espresso machine, warm wood shelves",
+      "composition": "close-up",
+      "lighting": "warm interior lighting, steam catching light",
+      "mood": "intimate, warm, cozy amber tones",
+      "materials": "ceramic cup, frothy milk surface, stainless steel pitcher, condensation",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "portrait"
+  },
+  {
+    "name": "Product hero",
+    "fields": {
+      "subject": "a minimalist ceramic watch on a textured linen cloth",
+      "style": "studio product photograph",
+      "background": "soft cream background, gentle shadow falloff",
+      "composition": "lower-right placement",
+      "lighting": "directional sunlight, late afternoon",
+      "mood": "elegant, minimal, premium quiet luxury",
+      "materials": "matte ceramic case, leather strap grain, woven linen texture",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "square"
+  },
+  {
+    "name": "Night street",
+    "fields": {
+      "subject": "a solitary figure walking under a streetlamp",
+      "style": "cinematic photograph",
+      "background": "rain-slicked cobblestone street, fog, distant city glow",
+      "composition": "rule of thirds, subject left",
+      "lighting": "neon ambient glow",
+      "mood": "lonely, noir, cool teal with warm amber highlights",
+      "materials": "wet pavement reflections, fog particles, wool coat texture",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "portrait"
+  }
+]

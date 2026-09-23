@@ -1,0 +1,116 @@
+[
+  {
+    "id": "studio-product",
+    "name": "Studio Product Portrait",
+    "description": "Clean product shot on a studio backdrop",
+    "icon": "📦",
+    "fields": {
+      "subject": "[your product]",
+      "style": "studio product photograph",
+      "background": "warm neutral background, soft gradient",
+      "composition": "centered",
+      "lighting": "warm studio lighting, soft shadows",
+      "mood": "clean, premium, aspirational",
+      "materials": "",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "square"
+  },
+  {
+    "id": "editorial-landscape",
+    "name": "Editorial Landscape",
+    "description": "Wide environmental shot with depth",
+    "icon": "🏞️",
+    "fields": {
+      "subject": "[main subject and setting]",
+      "style": "editorial photograph",
+      "background": "layered scene with foreground, middle distance, and background",
+      "composition": "wide establishing shot",
+      "lighting": "natural directional light, late afternoon",
+      "mood": "balanced, atmospheric, realistic",
+      "materials": "",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "landscape"
+  },
+  {
+    "id": "social-post",
+    "name": "Social Media Post",
+    "description": "Square or portrait post with bold visual impact",
+    "icon": "📱",
+    "fields": {
+      "subject": "[main subject]",
+      "style": "editorial photograph",
+      "background": "clean, uncluttered setting",
+      "composition": "centered",
+      "lighting": "bright even daylight",
+      "mood": "bold, engaging, vibrant",
+      "materials": "",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "fast",
+    "aspect": "square"
+  },
+  {
+    "id": "blog-hero",
+    "name": "Blog Hero Image",
+    "description": "Wide hero with negative space for text overlay",
+    "icon": "📝",
+    "fields": {
+      "subject": "[hero subject]",
+      "style": "editorial photograph",
+      "background": "atmospheric setting with ample negative space",
+      "composition": "negative space on the right",
+      "lighting": "golden hour backlight",
+      "mood": "warm, inviting, professional",
+      "materials": "",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "landscape"
+  },
+  {
+    "id": "character-portrait",
+    "name": "Character Portrait",
+    "description": "Full-body or close-up character shot",
+    "icon": "🧑",
+    "fields": {
+      "subject": "[character description, clothing, expression]",
+      "style": "cinematic photograph",
+      "background": "[setting that reinforces the character]",
+      "composition": "full body, facing camera",
+      "lighting": "dramatic single key light, deep shadows",
+      "mood": "dramatic, cinematic, character-driven",
+      "materials": "[clothing fabric, props, environmental textures]",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "portrait"
+  },
+  {
+    "id": "interior",
+    "name": "Architectural / Interior",
+    "description": "Interior space with natural light",
+    "icon": "🏠",
+    "fields": {
+      "subject": "[room or space description]",
+      "style": "editorial photograph",
+      "background": "[description of the full space]",
+      "composition": "wide establishing shot",
+      "lighting": "soft window light, ambient interior fill",
+      "mood": "airy, serene, lived-in warmth",
+      "materials": "[flooring, walls, furniture materials]",
+      "imagetext": ""
+    },
+    "exclusions": {"no-text": true, "no-logo": true, "no-watermark": true},
+    "profile": "standard",
+    "aspect": "landscape"
+  }
+]

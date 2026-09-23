@@ -26,13 +26,110 @@
         <div class="inline-controls"><select id="recipe">{% for recipe in recipes %}<option value="{{ recipe.id }}" data-prompt="{{ recipe.prompt }}" data-profile="{{ recipe.profile }}" data-aspect="{{ recipe.aspect }}" data-model="{{ recipe.model_id|default('qwen-image-2.1-local') }}" data-collection="{{ recipe.collection|default('') }}">{{ recipe.name }}{% if not recipe.builtin %} · Saved{% endif %}</option>{% endfor %}</select><button type="button" class="secondary" id="apply-recipe">Use recipe</button></div>
         <p id="recipe-status" class="sub" role="status">Recipes fill controls but never start generation.</p>
       </div>
-      <label for="prompt">{{ 'What should change?' if mode == 'transform' else 'Prompt' }}<textarea id="prompt" name="prompt" required maxlength="4000">{{ recipes[0].prompt if recipes else '' }}</textarea></label>
+      <div class="template-selector" id="template-selector">
+        <button type="button" class="template-pick" id="template-load-btn">📋 Load a template…</button>
+        <span class="template-quick">
+          <button type="button" class="secondary sm" data-template-id="studio-product">📦 Product</button>
+          <button type="button" class="secondary sm" data-template-id="editorial-landscape">🏞️ Landscape</button>
+          <button type="button" class="secondary sm" data-template-id="social-post">📱 Social</button>
+          <button type="button" class="secondary sm" data-template-id="blog-hero">📝 Hero</button>
+          <button type="button" class="secondary sm" data-template-id="character-portrait">🧑 Portrait</button>
+          <button type="button" class="secondary sm" data-template-id="interior">🏠 Interior</button>
+        </span>
+        <span class="template-quick user-templates" id="user-template-quick"></span>
+      </div>
+      <details class="prompt-wizard" id="prompt-wizard">
+        <summary>Prompt Wizard <span class="wizard-badge">structured fields → production prompt</span></summary>
+        <p class="sub wizard-intro">Fill in what you know. Leave fields empty to let the model decide. The wizard composes a prompt using Qwen&#8217;s recommended structure and writes it into the prompt box below.</p>
+        <div class="wizard-grid">
+          <label>Subject <span class="snippet-pills" data-field="subject"></span><input id="wiz-subject" type="text" placeholder="e.g. a clear glass vase with ivory peonies" maxlength="500"></label>
+          <label>Style / Medium <span class="snippet-pills" data-field="style"></span>
+            <select id="wiz-style">
+              <option value="">(leave open)</option>
+              <option value="editorial photograph">Editorial photograph</option>
+              <option value="studio product photograph">Studio product photograph</option>
+              <option value="oil painting">Oil painting</option>
+              <option value="watercolour painting">Watercolour painting</option>
+              <option value="3D render">3D render</option>
+              <option value="flat vector illustration">Flat vector illustration</option>
+              <option value="cinematic photograph">Cinematic photograph</option>
+              <option value="vintage photograph">Vintage photograph</option>
+              <option value="pencil sketch">Pencil sketch</option>
+              <option value="isometric illustration">Isometric illustration</option>
+              <option value="retro poster">Retro poster</option>
+              <option value="line art">Line art</option>
+              <option value="realistic photograph">Realistic photograph</option>
+              <option value="minimalist graphic">Minimalist graphic</option>
+            </select>
+          </label>
+          <label>Background / Setting <span class="snippet-pills" data-field="background"></span><input id="wiz-background" type="text" placeholder="e.g. weathered ochre plaster wall, walnut table, soft olive shadows" maxlength="500"></label>
+          <label>Composition / Framing <span class="snippet-pills" data-field="composition"></span>
+            <select id="wiz-composition">
+              <option value="">(leave open)</option>
+              <option value="centered">Centered</option>
+              <option value="close-up">Close-up</option>
+              <option value="wide establishing shot">Wide establishing shot</option>
+              <option value="rule of thirds, subject left">Rule of thirds, subject left</option>
+              <option value="rule of thirds, subject right">Rule of thirds, subject right</option>
+              <option value="negative space on the left">Negative space on the left</option>
+              <option value="negative space on the right">Negative space on the right</option>
+              <option value="overhead flatlay">Overhead flatlay</option>
+              <option value="full body, facing camera">Full body, facing camera</option>
+              <option value="lower-right placement">Lower-right placement</option>
+              <option value="upper-left placement">Upper-left placement</option>
+            </select>
+          </label>
+          <label>Lighting <span class="snippet-pills" data-field="lighting"></span>
+            <select id="wiz-lighting">
+              <option value="">(leave open)</option>
+              <option value="soft window light from the left">Soft window light from the left</option>
+              <option value="soft window light from the right">Soft window light from the right</option>
+              <option value="directional sunlight, late afternoon">Directional sunlight, late afternoon</option>
+              <option value="overcast diffused light">Overcast diffused light</option>
+              <option value="warm studio lighting, soft shadows">Warm studio lighting, soft shadows</option>
+              <option value="dramatic single key light, deep shadows">Dramatic single key light, deep shadows</option>
+              <option value="golden hour backlight">Golden hour backlight</option>
+              <option value="cool moonlight">Cool moonlight</option>
+              <option value="neon ambient glow">Neon ambient glow</option>
+              <option value="rim lighting from behind">Rim lighting from behind</option>
+              <option value="bright even daylight">Bright even daylight</option>
+            </select>
+          </label>
+          <label>Mood / Palette <span class="snippet-pills" data-field="mood"></span><input id="wiz-mood" type="text" placeholder="e.g. calm, warm, balanced, restrained palette" maxlength="300"></label>
+          <label>Materials / Textures <span class="snippet-pills" data-field="materials"></span><input id="wiz-materials" type="text" placeholder="e.g. brushed metal, frosted glass, visible canvas grain, woven linen" maxlength="400"></label>
+          <label>Text to appear in image <span class="snippet-pills" data-field="imagetext"></span><input id="wiz-imagetext" type="text" placeholder="e.g. &quot;SUMMER SALE&quot; in bold serif at the top" maxlength="300"></label>
+        </div>
+        <fieldset class="wizard-exclusions">
+          <legend>Exclusions</legend>
+          <label class="check"><input type="checkbox" id="wiz-no-text" checked> no readable text</label>
+          <label class="check"><input type="checkbox" id="wiz-no-logo" checked> no logo</label>
+          <label class="check"><input type="checkbox" id="wiz-no-watermark" checked> no watermark</label>
+        </fieldset>
+        <div class="wizard-footer">
+          <button type="button" class="secondary sm" id="wiz-save-template" title="Save current wizard fields as a reusable template">💾 Save as template</button>
+          <button type="button" class="secondary sm" id="wiz-save-snippets" title="Save all non-empty field values as snippets">📌 Save all as snippets</button>
+          <button type="button" class="secondary sm" id="wiz-load-example" title="Load a curated example prompt">✨ Show me an example</button>
+          <button type="button" class="secondary sm" id="wiz-clear" title="Clear all wizard fields">🗑 Clear fields</button>
+          <a href="#" id="wiz-manage-snippets" class="subtle-link">Manage snippets</a>
+        </div>
+      </details>
+      <label for="prompt" class="prompt-label">{{ 'What should change?' if mode == 'transform' else 'Prompt' }}
+        <div class="prompt-label-row"><span class="prompt-char-count" id="prompt-char-count">0 chars</span><button type="button" class="secondary sm copy-prompt" id="copy-prompt-btn" title="Copy prompt to clipboard" hidden>📋 Copy</button></div>
+        <textarea id="prompt" name="prompt" required maxlength="4000">{{ recipes[0].prompt if recipes else '' }}</textarea>
+      </label>
+      <div class="prompt-quality" id="prompt-quality-bar">
+        <div class="pq-bar"><div class="pq-fill" id="pq-fill"></div></div>
+        <span class="pq-label" id="pq-label">Short — add more detail for best results</span>
+      </div>
+      <label for="negative-prompt" class="negative-prompt-label">Negative prompt <span class="field-hint">what to avoid</span>
+        <textarea id="negative-prompt" name="negative_prompt" maxlength="2000" placeholder="e.g. blurry, distorted proportions, harsh flash, oversaturated colors" rows="2"></textarea>
+      </label>
       <label for="model-id">Local image generator
         <select id="model-id" name="model_id">{% for id, model in models.items() if model.status == 'available' %}<option value="{{ id }}">{{ model.label }} · {{ model.runtime }}</option>{% endfor %}</select>
       </label>
       <div class="form-grid">
         <label for="profile">Quality<select id="profile" name="profile">{% for key,p in profiles.items() %}<option value="{{ key }}" data-expected="{{ p.expected }}" data-square-width="{{ aspects[key]['square'][0] }}" data-square-height="{{ aspects[key]['square'][1] }}" data-portrait-width="{{ aspects[key]['portrait'][0] }}" data-portrait-height="{{ aspects[key]['portrait'][1] }}" data-landscape-width="{{ aspects[key]['landscape'][0] }}" data-landscape-height="{{ aspects[key]['landscape'][1] }}">{{ p.label }} · {{ p.steps }} steps</option>{% endfor %}</select></label>
-        <label for="aspect">Aspect<select id="aspect" name="aspect"><option value="square">Square</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option><option value="custom">Custom</option></select></label>
+        <label for="aspect">Aspect<select id="aspect" name="aspect"><option value="square">Square</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option><option value="custom">Custom</option></select><span class="aspect-presets"><button type="button" class="mini-preset" data-preset="instagram-story" title="Instagram Story 9:16">📱 Story</button><button type="button" class="mini-preset" data-preset="youtube-thumb" title="YouTube Thumbnail 16:9">▶️ Thumb</button><button type="button" class="mini-preset" data-preset="square-post" title="Square Post 1:1">⬜ Post</button></span></label>
         <label for="library-folder">Collection<select id="library-folder" name="library_folder">{% for folder in folders %}<option value="{{ folder }}">{{ folder }}</option>{% endfor %}</select></label>
       </div>
       <div id="queue-estimate" class="queue-estimate" role="status" data-active-jobs="{{ active_jobs }}"></div>

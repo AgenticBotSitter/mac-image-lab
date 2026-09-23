@@ -58,6 +58,7 @@ R2_PREFIX = "Marvin/Mac Image Lab/runs"
 LIBRARY_ROOT = Path.home() / "Documents/Mac Image Lab"
 GENERATED_ROOT = LIBRARY_ROOT / "Generated Images"
 THUMBNAIL_ROOT = ROOT / "cache" / "thumbnails"
+DATA = ROOT / "data"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
@@ -697,6 +698,7 @@ def validate_and_create(form: dict[str, str], parent: dict[str, Any] | None = No
         "model_id": normalized.model_id,
         "profile": normalized.profile,
         "prompt": normalized.prompt,
+        "negative_prompt": form.get("negative_prompt", "").strip(),
         "parameters": {
             "width": normalized.width,
             "height": normalized.height,
@@ -1431,6 +1433,79 @@ def upload_reference():
         "transform_url": "/transform",
     }), 410
 
+
+def _load_json(path: Path) -> Any:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+def _save_json_atomic(path: Path, data: Any) -> None:
+    content = (json.dumps(data, indent=2, sort_keys=True) + "\n").encode()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    storage.atomic_write_beneath(path.parent, path.name, content)
+
+@app.get("/api/templates")
+def list_templates():
+    bundled = _load_json(DATA / "templates.json") or []
+    user = _load_json(DATA / "user-templates.json") or []
+    return jsonify({"bundled": bundled, "user": user})
+
+@app.post("/api/user-templates")
+def create_user_template():
+    try:
+        entry = request.get_json(force=True)
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+    name = str(entry.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Template name is required"}), 400
+    tid = f"user-{slug(name)}-{uuid.uuid4().hex[:6]}"
+    template = {
+        "id": tid,
+        "name": name,
+        "description": str(entry.get("description") or ""),
+        "icon": "🔖",
+        "fields": entry.get("fields") or {},
+        "exclusions": entry.get("exclusions") or {},
+        "profile": entry.get("profile") or "standard",
+        "aspect": entry.get("aspect") or "square",
+    }
+    user = _load_json(DATA / "user-templates.json") or []
+    user.append(template)
+    _save_json_atomic(DATA / "user-templates.json", user)
+    return jsonify(template), 201
+
+@app.delete("/api/user-templates/<template_id>")
+def delete_user_template(template_id: str):
+    user = _load_json(DATA / "user-templates.json") or []
+    before = len(user)
+    user = [t for t in user if t.get("id") != template_id]
+    if len(user) == before:
+        abort(404)
+    _save_json_atomic(DATA / "user-templates.json", user)
+    return jsonify({"deleted": template_id})
+
+@app.get("/api/snippets")
+def get_snippets():
+    return jsonify(_load_json(DATA / "snippets.json") or {})
+
+@app.post("/api/snippets")
+def save_snippets():
+    try:
+        data = request.get_json(force=True)
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+    if not isinstance(data, dict):
+        return jsonify({"error": "Snippets must be a JSON object"}), 400
+    _save_json_atomic(DATA / "snippets.json", data)
+    return jsonify(data)
+
+@app.get("/api/examples")
+def list_examples():
+    return jsonify(_load_json(DATA / "examples.json") or [])
 
 if __name__ == "__main__":
     if HOST != "127.0.0.1":
